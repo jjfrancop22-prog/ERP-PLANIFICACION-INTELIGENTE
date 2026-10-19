@@ -1,0 +1,467 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn(){return request.auth != null;}
+  function profile(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
+  function active(){return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && profile().data.status == 'ACTIVO';}
+  function boss(){return active() && profile().data.role == 'JEFE';}
+  match /users/{uid} {
+   allow get: if signedIn() && (request.auth.uid == uid || boss());
+   allow list: if boss();
+   allow create, update, delete: if false;
+   match /notifications/{id} {
+    allow read: if active() && (request.auth.uid == uid || boss());
+    allow write: if false;
+   }
+  }
+  // V29.0.75: expediente de conversación. Solo JEFE y analista asignado.
+  // V29.0.79: cada usuario solo puede consultar y modificar sus propias lecturas.
+  match /communicationReads/{uid}/plans/{planId} {
+   function assigned(){return exists(/databases/$(database)/documents/plannerAssignments/$(planId)) && (boss() || get(/databases/$(database)/documents/plannerAssignments/$(planId)).data.analystId==uid);}
+   allow read: if active() && request.auth.uid==uid;
+   allow create,update: if active() && request.auth.uid==uid && assigned()
+    && request.resource.data.keys().hasOnly(['messageId','updatedAt','archived','assignmentSeen'])
+    && (!('messageId' in request.resource.data) || (request.resource.data.messageId is string && request.resource.data.messageId.size()>0 && request.resource.data.messageId.size()<=160))
+    && (!('archived' in request.resource.data) || request.resource.data.archived is bool)
+    && (!('assignmentSeen' in request.resource.data) || request.resource.data.assignmentSeen is int)
+    && request.resource.data.updatedAt==request.time;
+   allow delete: if false;
+  }
+  match /activityCommunications/{planId} {
+   function planPath(){return /databases/$(database)/documents/plannerAssignments/$(planId);}
+   function participant(){return active() && exists(planPath()) && (boss() || get(planPath()).data.analystId == request.auth.uid);}
+   allow get: if participant();
+   allow list, delete: if false;
+   allow create: if boss() && exists(planPath())
+    && request.resource.data.keys().hasOnly(['status','updatedBy','updatedAt','revision'])
+    && request.resource.data.status in ['ATENCION','SEGUIMIENTO','ATENDIDO']
+    && request.resource.data.updatedBy==request.auth.uid && request.resource.data.updatedAt==request.time
+    && request.resource.data.revision==1;
+   allow update: if boss() && exists(planPath())
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedBy','updatedAt','revision'])
+    && request.resource.data.status in ['ATENCION','SEGUIMIENTO','ATENDIDO']
+    && request.resource.data.updatedBy==request.auth.uid && request.resource.data.updatedAt==request.time
+    && request.resource.data.revision==resource.data.revision+1;
+   match /messages/{messageId} {
+    allow read: if participant();
+    allow create: if participant()
+     && request.resource.data.keys().hasOnly(['planId','body','authorId','authorName','createdAt'])
+     && request.resource.data.planId==planId
+     && request.resource.data.authorId==request.auth.uid
+     && request.resource.data.body is string && request.resource.data.body.size()>0 && request.resource.data.body.size()<=1500
+     && request.resource.data.authorName is string && request.resource.data.authorName.size()<=100
+     && request.resource.data.createdAt==request.time;
+    allow update, delete: if false;
+   }
+  }
+  // V29.0.90: incidencias por actividad, clasificación exclusiva del JEFE.
+  match /activityTechnicalAlerts/{planId}/items/{alertId} {
+   function planPath(){return /databases/$(database)/documents/plannerAssignments/$(planId);}
+   function participant(){return active() && exists(planPath()) && (boss() || get(planPath()).data.analystId==request.auth.uid);}
+   allow read: if participant();
+   allow create: if participant()
+    && request.resource.data.keys().hasOnly(['planId','description','authorId','authorName','severity','status','createdAt','updatedAt','updatedBy','revision','history'])
+    && request.resource.data.planId==planId && request.resource.data.authorId==request.auth.uid
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.description is string && request.resource.data.description.size()>=5 && request.resource.data.description.size()<=1200
+    && request.resource.data.authorName is string && request.resource.data.authorName.size()<=100
+    && request.resource.data.severity=='INFORMATIVA' && request.resource.data.status=='ABIERTA'
+    && request.resource.data.createdAt==request.time && request.resource.data.updatedAt==request.time
+    && request.resource.data.revision==1 && request.resource.data.history is list && request.resource.data.history.size()==1;
+   allow update: if boss() && exists(planPath())
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['severity','status','updatedAt','updatedBy','revision','history'])
+    && request.resource.data.severity in ['INFORMATIVA','REVISION','CRITICA']
+    && request.resource.data.status in ['ABIERTA','EN_SEGUIMIENTO','RESUELTA']
+    && request.resource.data.updatedAt==request.time && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.history is list && request.resource.data.history.size()==resource.data.history.size()+1
+    && request.resource.data.history.size()<=40;
+   allow delete: if false;
+  }
+  // Contadores de códigos técnicos por categoría; uso exclusivo del JEFE.
+  match /catalogCounters/{prefix} {
+   allow get: if boss();
+   allow list, delete: if false;
+   allow create: if boss() && request.resource.data.keys().hasOnly(['last']) && request.resource.data.last is int && request.resource.data.last > 0;
+   allow update: if boss() && request.resource.data.keys().hasOnly(['last']) && request.resource.data.last is int && request.resource.data.last > resource.data.last;
+  }
+  // V29.0.46: cartas maestras, creadas exclusivamente por JEFE.
+  match /controlCards/{id} {
+    allow read: if active();
+    allow create: if boss()
+      && request.resource.data.keys().hasOnly(['name','code','activityIds','status','frequency','min','max','unit','kind','equipment','tolerance','createdBy','createdAt'])
+      && request.resource.data.name is string && request.resource.data.name.size()>0
+      && request.resource.data.code is string && request.resource.data.code.size()>0
+      && request.resource.data.activityIds is list && request.resource.data.activityIds.size()>0 && request.resource.data.activityIds.size()<=100
+      && request.resource.data.min is number && request.resource.data.max is number
+      && request.resource.data.min<request.resource.data.max
+      && request.resource.data.kind in ['SIMPLE','MULTIPUNTO']
+      && request.resource.data.equipment is string
+      && (request.resource.data.tolerance==null || (request.resource.data.tolerance is number && request.resource.data.tolerance>0))
+      && request.resource.data.status=='ACTIVO' && request.resource.data.frequency=='DIARIA'
+      && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+    // Solo JEFE corrige identificación; no altera límites, vínculos ni registros diarios.
+    allow update: if boss()
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','code','equipment','identityRevision','identityUpdatedBy','identityUpdatedAt','identityReason'])
+      && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=160
+      && request.resource.data.code is string && request.resource.data.code.size()>0 && request.resource.data.code.size()<=80
+      && request.resource.data.equipment is string && request.resource.data.equipment.size()>0 && request.resource.data.equipment.size()<=160
+      && request.resource.data.identityRevision==resource.data.get('identityRevision',0)+1
+      && request.resource.data.identityUpdatedBy==request.auth.uid
+      && request.resource.data.identityUpdatedAt==request.time
+      && request.resource.data.identityReason is string && request.resource.data.identityReason.size()>=8 && request.resource.data.identityReason.size()<=500;
+    allow delete: if false;
+  }
+  match /controlCardIdentityHistory/{auditId} {
+    allow read: if boss();
+    allow create: if boss()
+      && request.resource.data.keys().hasOnly(['cardId','revision','before','after','reason','updatedBy','updatedAt'])
+      && request.resource.data.cardId is string
+      && request.resource.data.updatedBy==request.auth.uid
+      && request.resource.data.updatedAt==request.time
+      && request.resource.data.reason is string && request.resource.data.reason.size()>=8
+      && request.resource.data.before is map && request.resource.data.after is map
+      && getAfter(/databases/$(database)/documents/controlCards/$(request.resource.data.cardId)).data.identityRevision==request.resource.data.revision
+      && getAfter(/databases/$(database)/documents/controlCards/$(request.resource.data.cardId)).data.code==request.resource.data.after.code;
+    allow update, delete: if false;
+  }
+  // Históricos físicos: solo JEFE, inmutables y separados de cumplimiento diario.
+  match /manualControlHistory/{recordId} {
+    allow read: if active();
+    allow create: if boss()
+      && request.resource.data.keys().hasOnly(['date','controlId','kind','origin','status','readings','nominals','tolerance','conforms','responsibleUid','responsibleName','source','observations','digitizedBy','digitizedAt'])
+      && recordId==request.resource.data.date+'_'+request.resource.data.controlId
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && exists(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId))
+      && !exists(/databases/$(database)/documents/dailyControlRecords/$(recordId))
+      && request.resource.data.kind=='MULTIPUNTO'
+      && request.resource.data.origin=='HISTORICO_MANUAL'
+      && request.resource.data.nominals==[4,7,10]
+      && request.resource.data.readings is list && request.resource.data.readings.size()==3
+      && request.resource.data.readings[0] is number && request.resource.data.readings[1] is number && request.resource.data.readings[2] is number
+      && request.resource.data.readings[0]>=0 && request.resource.data.readings[0]<=14
+      && request.resource.data.readings[1]>=0 && request.resource.data.readings[1]<=14
+      && request.resource.data.readings[2]>=0 && request.resource.data.readings[2]<=14
+      && request.resource.data.tolerance==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.tolerance
+      && request.resource.data.conforms == ((request.resource.data.readings[0]-4<=request.resource.data.tolerance && 4-request.resource.data.readings[0]<=request.resource.data.tolerance) && (request.resource.data.readings[1]-7<=request.resource.data.tolerance && 7-request.resource.data.readings[1]<=request.resource.data.tolerance) && (request.resource.data.readings[2]-10<=request.resource.data.tolerance && 10-request.resource.data.readings[2]<=request.resource.data.tolerance))
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
+      && request.resource.data.responsibleUid is string
+      && exists(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid))
+      && request.resource.data.responsibleName==get(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid)).data.name
+      && request.resource.data.source is string && request.resource.data.source.size()>=3 && request.resource.data.source.size()<=200
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1000
+      && request.resource.data.digitizedBy==request.auth.uid && request.resource.data.digitizedAt==request.time;
+    allow update, delete: if false;
+  }
+  // Un único documento por día y carta, incluso con dos analistas simultáneos.
+  match /dailyControlRecords/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && request.resource.data.keys().hasOnly(['date','controlId','status','value','unit','min','max','completedBy','completedAt'])
+      && recordId==request.resource.data.date+'_'+request.resource.data.controlId
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.controlId is string
+      && request.resource.data.completedBy==request.auth.uid
+      && request.resource.data.completedAt==request.time
+      && request.resource.data.status=='COMPLETADA'
+      && request.resource.data.value is number
+      && exists(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId))
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.status=='ACTIVO'
+      && request.resource.data.min==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.min
+      && request.resource.data.max==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.max
+      && request.resource.data.unit==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.unit
+      && request.resource.data.value>=request.resource.data.min
+      && request.resource.data.value<=request.resource.data.max;
+    // V29.0.98: registro multipunto con tres niveles, validación y evidencia no conforme.
+    allow create: if active()
+      && request.resource.data.keys().hasOnly(['date','controlId','kind','status','readings','errors','nominals','tolerance','conforms','observations','completedBy','completedAt'])
+      && recordId==request.resource.data.date+'_'+request.resource.data.controlId
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.completedBy==request.auth.uid
+      && request.resource.data.completedAt==request.time
+      && request.resource.data.kind=='MULTIPUNTO'
+      && request.resource.data.readings is list && request.resource.data.readings.size()==3
+      && request.resource.data.nominals==[4,7,10]
+      && request.resource.data.errors is list && request.resource.data.errors.size()==3
+      && request.resource.data.readings[0] is number && request.resource.data.readings[1] is number && request.resource.data.readings[2] is number
+      && request.resource.data.readings[0]>=0 && request.resource.data.readings[0]<=14
+      && request.resource.data.readings[1]>=0 && request.resource.data.readings[1]<=14
+      && request.resource.data.readings[2]>=0 && request.resource.data.readings[2]<=14
+      && request.resource.data.errors[0] == request.resource.data.readings[0]-4
+      && request.resource.data.errors[1] == request.resource.data.readings[1]-7
+      && request.resource.data.errors[2] == request.resource.data.readings[2]-10
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && exists(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId))
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.kind=='MULTIPUNTO'
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.status=='ACTIVO'
+      && request.resource.data.tolerance==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.tolerance
+      && request.resource.data.conforms == (request.resource.data.errors[0]<=request.resource.data.tolerance && request.resource.data.errors[0]>=-request.resource.data.tolerance && request.resource.data.errors[1]<=request.resource.data.tolerance && request.resource.data.errors[1]>=-request.resource.data.tolerance && request.resource.data.errors[2]<=request.resource.data.tolerance && request.resource.data.errors[2]>=-request.resource.data.tolerance)
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME');
+    allow update,delete: if false;
+  }
+
+  // V29.0.25: fichas y versiones históricas; se conserva createdAt mediante merge.
+  match /catalog/{id} {
+    allow read: if active();
+    allow create: if boss()
+      && request.resource.data.updatedBy == request.auth.uid
+      && request.resource.data.revision == 1
+      && request.resource.data.technicalVersion == 1
+      && request.resource.data.durationMin is number
+      && request.resource.data.durationMin > 0;
+    // Compatibilidad con fichas anteriores a la introducción de technicalVersion.
+    // Se protegen el identificador, la creación y la secuencia de revisiones.
+    allow update: if boss()
+      && request.resource.data.updatedBy == request.auth.uid
+      && request.resource.data.revision is int
+      && request.resource.data.revision == resource.data.get('revision',0) + 1
+      && request.resource.data.technicalVersion is int
+      && request.resource.data.technicalVersion == resource.data.get('technicalVersion',1) + 1
+      && request.resource.data.durationMin is number
+      && request.resource.data.durationMin > 0
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name','code','method','instructions','curveType','curvePoints','curveUnit',
+        'curveStandards','timeModel','timeRanges','components','sampleParameters',
+        'technicalVersion','area','durationMin','type','requiresSamples',
+        'requiresCurve','reactives','active','revision','updatedAt','updatedBy',
+        'controlIds'
+      ]);
+    allow delete: if false;
+    match /versions/{versionId} {
+      allow get, list: if boss();
+      allow create: if boss()
+        && request.resource.data.keys().hasOnly(['snapshot','archivedAt','archivedBy','version'])
+        && request.resource.data.keys().hasAll(['snapshot','archivedAt','archivedBy','version'])
+        && request.resource.data.archivedBy == request.auth.uid
+        && request.resource.data.archivedAt == request.time
+        && request.resource.data.snapshot is map
+        && request.resource.data.version is int
+        && request.resource.data.version >= 1
+        && request.resource.data.snapshot.get('technicalVersion',1) == request.resource.data.version
+        && request.resource.data.snapshot == get(/databases/$(database)/documents/catalog/$(id)).data;
+      allow update, delete: if false;
+    }
+  }
+
+  // Registro único por tipo + nombre normalizado. El contador solo se modifica
+  // mediante transacción. La aplicación nunca debe usar estos datos como
+  // sustituto de un backend privilegiado para autorizaciones adicionales.
+  match /productRegistry/{key} {
+    allow get: if boss();
+    allow list, update, delete: if false;
+    allow create: if boss() && request.resource.data.keys().hasAll(['code','name','productType','createdAt','createdBy'])
+      && request.resource.data.createdBy==request.auth.uid
+      && request.resource.data.createdAt==request.time
+      && request.resource.data.productType in ['REACTIVO','ESTANDAR','MRC','INSUMO'];
+  }
+  match /productCounters/{type} {
+    allow get: if boss();
+    allow list, delete: if false;
+    allow create: if boss() && type in ['REACTIVO','ESTANDAR','MRC','INSUMO']
+      && request.resource.data.keys().hasOnly(['last']) && request.resource.data.last==1;
+    allow update: if boss() && type in ['REACTIVO','ESTANDAR','MRC','INSUMO']
+      && request.resource.data.keys().hasOnly(['last'])
+      && request.resource.data.last==resource.data.last+1;
+  }
+
+  // V29.0.43: el movimiento de analista requiere actividad abierta y asiento vinculado.
+  function journeyEntry(op){return getAfter(/databases/$(database)/documents/journeyConsumptions/$(op));}
+  function journeyOwner(op){return active() && profile().data.role=='ANALISTA'
+   && journeyEntry(op).data.uid==request.auth.uid
+   && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.analystId==request.auth.uid
+   && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.status=='EN_PROCESO';}
+  match /reagents/{id} {
+   allow read: if active();
+   function valid(){let d=request.resource.data;return d.keys().hasOnly(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy','lastOperationId','tareGrams','densityGramsPerMl']) && d.keys().hasAll(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy']) && d.name is string && d.name.size()>0 && d.name.size()<=120 && d.code is string && d.code.size()>0 && d.code.size()<=60 && d.lot is string && d.lot.size()>0 && d.lot.size()<=80 && d.brand is string && d.get('presentation','') is string && d.get('presentation','').size()<=120 && d.get('productType','REACTIVO') in ['REACTIVO','ESTANDAR','MRC','INSUMO'] && d.get('activityIds',[]) is list && d.get('activityIds',[]).size()<=100 && d.get('tareGrams',0) is number && d.get('tareGrams',0)>=0 && d.get('densityGramsPerMl',0) is number && (d.control!='LIQUID' || d.get('densityGramsPerMl',0)>0) && d.control in ['COUNT','SOLID','LIQUID'] && ((d.control=='COUNT' && d.unit=='unidad') || (d.control=='SOLID' && d.unit in ['g','kg']) || (d.control=='LIQUID' && d.unit in ['mL','L'])) && d.stock is number && d.stock>=0 && d.minStock is number && d.minStock>=0 && d.status in ['ACTIVO','INACTIVO'] && d.version is int && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
+   allow create: if boss() && valid() && request.resource.data.version==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+   allow update: if boss() && valid() && request.resource.data.version==resource.data.version+1 && request.resource.data.stock==resource.data.stock && request.resource.data.get('lastOperationId','')==resource.data.get('lastOperationId','') && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt;
+   allow delete: if false;
+
+   // Entrada administrativa: saldo y asiento confirmados conjuntamente.
+   allow update: if boss() && valid()
+    && request.resource.data.version==resource.data.version+1
+    && request.resource.data.createdBy==resource.data.createdBy
+    && request.resource.data.createdAt==resource.data.createdAt
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock','version','updatedAt','updatedBy','lastOperationId'])
+    && request.resource.data.stock>resource.data.stock
+    && request.resource.data.lastOperationId is string
+    && request.resource.data.lastOperationId.size()>=16
+    && !exists(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId))
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.kind=='ENTRADA'
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockBefore==resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockAfter==request.resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.version==request.resource.data.version
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.uid==request.auth.uid;
+   // Consumo: analista autorizado solo con jornada vinculada.
+   allow update: if (boss() || journeyOwner(request.resource.data.lastOperationId)) && valid()
+    && request.resource.data.version==resource.data.version+1
+    && request.resource.data.createdBy==resource.data.createdBy
+    && request.resource.data.createdAt==resource.data.createdAt
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock','version','updatedAt','updatedBy','lastOperationId'])
+    && request.resource.data.stock>=0
+    && request.resource.data.stock<resource.data.stock
+    && request.resource.data.lastOperationId is string
+    && request.resource.data.lastOperationId.size()>=16
+    && !exists(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId))
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.kind=='CONSUMO'
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockBefore==resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockAfter==request.resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.version==request.resource.data.version
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.uid==request.auth.uid;
+   match /movements/{movementId} {
+    allow get: if boss() || (active() && (!exists(/databases/$(database)/documents/reagents/$(id)/movements/$(movementId)) || resource.data.uid==request.auth.uid));
+    allow list: if boss() && request.query.limit!=null && request.query.limit<=20;
+    allow update,delete: if false;
+    allow create: if (boss() || (journeyOwner(movementId) && request.resource.data.kind=='CONSUMO'
+        && request.resource.data.measurement.method==get(/databases/$(database)/documents/reagents/$(id)).data.control
+        && request.resource.data.measurement.planId==journeyEntry(movementId).data.planId
+        && journeyEntry(movementId).data.reagentId==id
+        && journeyEntry(movementId).data.quantity==request.resource.data.quantity))
+      && request.resource.data.keys().hasOnly(['id','reagentId','uid','kind','quantity','unit','control','stockBefore','stockAfter','version','measurement','notes','createdAt'])
+      && request.resource.data.keys().hasAll(['id','reagentId','uid','kind','quantity','unit','control','stockBefore','stockAfter','version','measurement','notes','createdAt'])
+      && request.resource.data.id==movementId
+      && request.resource.data.reagentId==id
+      && request.resource.data.uid==request.auth.uid
+      && request.resource.data.kind in ['CONSUMO','ENTRADA']
+      && request.resource.data.quantity is number
+      && request.resource.data.quantity>0
+      && request.resource.data.measurement is map
+      && request.resource.data.notes is string
+      && request.resource.data.notes.size()<=500
+      && request.resource.data.createdAt==request.time
+      && get(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockBefore
+      && getAfter(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockAfter
+      && getAfter(/databases/$(database)/documents/reagents/$(id)).data.version==request.resource.data.version
+      && getAfter(/databases/$(database)/documents/reagents/$(id)).data.lastOperationId==movementId
+      && ((request.resource.data.kind=='CONSUMO' && request.resource.data.stockBefore-request.resource.data.stockAfter >= request.resource.data.quantity-0.000002 && request.resource.data.stockBefore-request.resource.data.stockAfter <= request.resource.data.quantity+0.000002) || (request.resource.data.kind=='ENTRADA' && request.resource.data.stockAfter-request.resource.data.stockBefore >= request.resource.data.quantity-0.000002 && request.resource.data.stockAfter-request.resource.data.stockBefore <= request.resource.data.quantity+0.000002));
+   }
+  }
+  // Registro inmutable de cada descuento, visible únicamente a su analista y JEFE.
+  match /journeyConsumptions/{op} {
+   allow get: if boss() || (active() && (!exists(/databases/$(database)/documents/journeyConsumptions/$(op)) || resource.data.uid==request.auth.uid));
+   allow list: if boss() || (active() && profile().data.role=='ANALISTA' && resource.data.uid==request.auth.uid && request.query.limit!=null && request.query.limit<=100);
+   allow update,delete: if false;
+   allow create: if active() && profile().data.role=='ANALISTA'
+    && request.resource.data.keys().hasOnly(['id','planId','reagentId','uid','quantity','unit','measurement','notes','createdAt'])
+    && request.resource.data.keys().hasAll(['id','planId','reagentId','uid','quantity','unit','measurement','notes','createdAt'])
+    && request.resource.data.id==op && request.resource.data.uid==request.auth.uid
+    && request.resource.data.planId is string && request.resource.data.reagentId is string
+    && request.resource.data.quantity is number && request.resource.data.quantity>0
+    && request.resource.data.unit is string && request.resource.data.measurement is map && request.resource.data.notes is string
+    && request.resource.data.notes.size()<=500 && request.resource.data.createdAt==request.time
+    && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.analystId==request.auth.uid
+    && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.status=='EN_PROCESO'
+    && getAfter(/databases/$(database)/documents/reagents/$(request.resource.data.reagentId)/movements/$(op)).data.uid==request.auth.uid
+    && getAfter(/databases/$(database)/documents/reagents/$(request.resource.data.reagentId)/movements/$(op)).data.quantity==request.resource.data.quantity
+    && getAfter(/databases/$(database)/documents/reagents/$(request.resource.data.reagentId)/movements/$(op)).data.unit==request.resource.data.unit;
+  }
+  // Competencias técnicas administradas exclusivamente por JEFE.
+  match /analystCompetencies/{uid} {
+   allow read: if boss();
+   allow create, update: if boss()
+    && exists(/databases/$(database)/documents/users/$(uid))
+    && get(/databases/$(database)/documents/users/$(uid)).data.role == 'ANALISTA'
+    && request.resource.data.keys().hasOnly(['areas','activityIds','updatedBy','updatedAt'])
+    && request.resource.data.keys().hasAll(['areas','updatedBy','updatedAt'])
+    && request.resource.data.get('activityIds',[]) is list
+    && request.resource.data.get('activityIds',[]).size() <= 150
+    && request.resource.data.areas is list
+    && request.resource.data.areas.size() <= 7
+    && request.resource.data.areas.hasOnly(['Ensayos Analíticos','Recepción de Muestras','Microbiología','AASS','Actividad de Laboratorio','Soporte de Calidad','Operaciones'])
+    && request.resource.data.updatedBy == request.auth.uid
+    && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  // Asignaciones del planificador. Solo JEFE crea, reasigna o cancela.
+  match /plannerAssignments/{id} {
+   allow read: if boss() || (active() && profile().data.role == 'ANALISTA' && resource.data.analystId == request.auth.uid);
+   function validPlan(){let d=request.resource.data;return d.keys().hasOnly(['date','analystId','analystName','activityId','activityName','area','startMin','endMin','durationMin','timeModel','sampleCount','catalogRevision','catalogTechnicalVersion','notes','status','revision','updatedBy','updatedAt','createdBy','createdAt','startedBy','startedAt','finishedBy','finishedAt','closureControlIds','closureConsumptionId'])
+    && d.keys().hasAll(['date','analystId','analystName','activityId','activityName','area','startMin','endMin','durationMin','timeModel','sampleCount','catalogRevision','catalogTechnicalVersion','notes','status','revision','updatedBy','updatedAt','createdBy','createdAt'])
+    && d.date is string && d.date.size()==10 && d.analystId is string && d.analystName is string && d.activityId is string && d.activityName is string && d.area is string
+    && d.startMin is int && d.endMin is int && d.startMin>=480 && d.endMin<=1020 && d.endMin>d.startMin
+    && (d.startMin<720 || d.startMin>=780) && (d.endMin<=720 || d.endMin>780)
+    && d.durationMin==((d.startMin<720 ? (d.endMin<720 ? d.endMin : 720)-d.startMin : 0) + (d.endMin>780 ? d.endMin-(d.startMin>780 ? d.startMin : 780) : 0)) && d.get('timeModel','FIJO') in ['FIJO','MUESTRAS','LIBRE','COMPUESTA'] && d.get('sampleCount',0) is int && d.get('sampleCount',0)>=0 && d.get('catalogRevision',1) is int && d.get('catalogTechnicalVersion',1) is int && d.notes is string && d.notes.size()<=500
+    && d.status in ['PROGRAMADO','CANCELADO','EN_PROCESO','REALIZADO'] && d.revision is int
+    && d.updatedBy==request.auth.uid && d.updatedAt==request.time
+    && exists(/databases/$(database)/documents/users/$(d.analystId))
+    && get(/databases/$(database)/documents/users/$(d.analystId)).data.role=='ANALISTA'
+    && get(/databases/$(database)/documents/users/$(d.analystId)).data.status=='ACTIVO';}
+   allow create: if boss() && validPlan() && request.resource.data.status=='PROGRAMADO' && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+   allow update: if boss() && validPlan() && resource.data.status=='PROGRAMADO'
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt
+    && (request.resource.data.status=='PROGRAMADO' || (request.resource.data.status=='CANCELADO' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt'])));
+   // Solo el analista asignado puede abrir su actividad; campos y revisión controlados.
+   allow update: if active() && profile().data.role == 'ANALISTA'
+    && resource.data.analystId == request.auth.uid
+    && resource.data.status == 'PROGRAMADO'
+    && request.resource.data.status == 'EN_PROCESO'
+    && request.resource.data.revision == resource.data.revision + 1
+    && request.resource.data.startedBy == request.auth.uid
+    && request.resource.data.startedAt == request.time
+    && request.resource.data.updatedBy == request.auth.uid
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','startedBy','startedAt','updatedBy','updatedAt']);
+   // V29.0.47: cierre verificable. La lista de cartas procede del catálogo
+   // administrado por JEFE, no de una lista libre enviada por el analista.
+   function catalogPath(){return /databases/$(database)/documents/catalog/$(resource.data.activityId);}
+   function techPath(){return /databases/$(database)/documents/journeyTechnical/$(id);}
+   function controlOk(cardId){
+    return exists(/databases/$(database)/documents/dailyControlRecords/$(resource.data.date+'_'+cardId))
+      && get(/databases/$(database)/documents/dailyControlRecords/$(resource.data.date+'_'+cardId)).data.status=='COMPLETADA'
+      && get(/databases/$(database)/documents/dailyControlRecords/$(resource.data.date+'_'+cardId)).data.controlId==cardId;
+   }
+   function controlsOk(ids){
+    return ids.size()<=5
+      && (ids.size()==0 || controlOk(ids[0]))
+      && (ids.size()<2 || controlOk(ids[1]))
+      && (ids.size()<3 || controlOk(ids[2]))
+      && (ids.size()<4 || controlOk(ids[3]))
+      && (ids.size()<5 || controlOk(ids[4]));
+   }
+   function consumptionOk(cat){
+    return !(cat.get('reactives',[]) is list && cat.get('reactives',[]).size()>0)
+      || (request.resource.data.closureConsumptionId is string
+        && exists(/databases/$(database)/documents/journeyConsumptions/$(request.resource.data.closureConsumptionId))
+        && get(/databases/$(database)/documents/journeyConsumptions/$(request.resource.data.closureConsumptionId)).data.planId==id
+        && get(/databases/$(database)/documents/journeyConsumptions/$(request.resource.data.closureConsumptionId)).data.uid==request.auth.uid);
+   }
+   allow update: if active() && profile().data.role=='ANALISTA'
+    && resource.data.analystId==request.auth.uid
+    && resource.data.status=='EN_PROCESO'
+    && request.resource.data.status=='REALIZADO'
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.finishedBy==request.auth.uid
+    && request.resource.data.finishedAt==request.time
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.updatedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt','finishedBy','finishedAt','closureControlIds','closureConsumptionId'])
+    && exists(catalogPath()) && exists(techPath())
+    && get(techPath()).data.analystId==request.auth.uid
+    && get(techPath()).data.parameters is list && get(techPath()).data.parameters.size()>0
+    && get(catalogPath()).data.get('controlIds',[]) is list
+    && request.resource.data.closureControlIds==get(catalogPath()).data.get('controlIds',[])
+    && controlsOk(request.resource.data.closureControlIds)
+    && consumptionOk(get(catalogPath()).data);
+   allow delete: if false;
+  }
+  // Borradores técnicos de Mi Jornada: solo su analista asignado y actividad EN_PROCESO.
+  match /journeyTechnical/{planId} {
+   function plan(){return get(/databases/$(database)/documents/plannerAssignments/$(planId));}
+   function owner(){return active() && plan().data.analystId==request.auth.uid && plan().data.status=='EN_PROCESO';}
+   function validTechnical(){let d=request.resource.data;return d.keys().hasOnly(['analystId','planId','date','revision','sampleCount','parameters','observations','updatedBy','updatedAt','createdBy','createdAt'])
+    && d.keys().hasAll(['analystId','planId','date','revision','sampleCount','parameters','observations','updatedBy','updatedAt','createdBy','createdAt'])
+    && d.analystId==request.auth.uid && d.planId==planId && d.date==plan().data.date
+    && d.revision is int && d.sampleCount is int && d.sampleCount>=0 && d.sampleCount<=100000
+    && d.parameters is list && d.parameters.size()<=100
+    && d.observations is string && d.observations.size()<=1000
+    && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
+   allow get: if boss() || (active() && exists(/databases/$(database)/documents/plannerAssignments/$(planId)) && plan().data.analystId==request.auth.uid);
+   allow list: if false;
+   allow create: if owner() && validTechnical() && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+   allow update: if owner() && validTechnical() && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt;
+   allow delete: if false;
+  }
+  match /{document=**} {allow read,write:if false;}
+ }
+}
