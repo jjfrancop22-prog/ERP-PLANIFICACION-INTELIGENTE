@@ -32,7 +32,7 @@ export function watchShared(key,ref,callback,onError){
  return ()=>{entry.callbacks.delete(callback);if(!entry.callbacks.size){entry.unsubscribe?.();listeners.delete(key);syncState.activeListeners=listeners.size;emit()}};
 }
 export const watchProfile=(uid,cb,err)=>watchShared(`profile:${uid}`,doc(db,'users',uid),cb,err);
-export const watchCatalog=(cb,err)=>watchShared('catalog:150',query(collection(db,'catalog'),orderBy('name'),limit(150)),cb,err);
+export const watchCatalog=(cb,err)=>watchShared('catalog:all:v2',query(collection(db,'catalog'),orderBy('name')),cb,err);
 export const watchNotifications=(uid,cb,err)=>watchShared(`notifications:${uid}:20`,query(collection(db,'users',uid,'notifications'),orderBy('createdAt','desc'),limit(20)),cb,err);
 export async function readAnalysts(){const snap=await getDocs(query(collection(db,'users'),limit(100)));return snap.docs.map(x=>({id:x.id,...x.data()}))}
 export async function saveCatalog(item,uid){
