@@ -299,7 +299,7 @@ export async function saveJourneyTechnical(planId,uid,payload){
    const previous=old.exists()?old.data():null;
    if(previous&&previous.analystId!==uid)throw Error('El registro pertenece a otro usuario.');
    if(previous&&previous.revision!==payload.expectedRevision)throw Error('Otro dispositivo actualizó estos datos. Recargue antes de guardar para evitar sobrescribirlos.');
-   const data={analystId:uid,planId,date:plan.data().date,revision:(previous?.revision||0)+1,sampleCount:payload.sampleCount,parameters:payload.parameters,observations:payload.observations,updatedBy:uid,updatedAt:serverTimestamp(),createdBy:previous?.createdBy||uid,createdAt:previous?.createdAt||serverTimestamp()};
+   const data={analystId:uid,planId,date:plan.data().date,revision:(previous?.revision||0)+1,sampleCount:payload.sampleCount,parameters:payload.parameters,observations:payload.observations,analytical:payload.analytical||previous?.analytical||null,updatedBy:uid,updatedAt:serverTimestamp(),createdBy:previous?.createdBy||uid,createdAt:previous?.createdAt||serverTimestamp()};
    tx.set(techRef,data);return data.revision;
   });
   await waitForPendingWrites(db);syncState.serverConfirmed=true;return result;
