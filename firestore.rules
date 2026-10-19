@@ -308,6 +308,22 @@ service cloud.firestore {
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockAfter==request.resource.data.stock
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.version==request.resource.data.version
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.uid==request.auth.uid;
+   // Ajuste administrativo: solo JEFE, saldo y asiento atómicos.
+   allow update: if boss() && valid()
+    && request.resource.data.version==resource.data.version+1
+    && request.resource.data.createdBy==resource.data.createdBy
+    && request.resource.data.createdAt==resource.data.createdAt
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock','version','updatedAt','updatedBy','lastOperationId'])
+    && request.resource.data.stock!=resource.data.stock
+    && request.resource.data.stock>=0
+    && request.resource.data.lastOperationId is string
+    && request.resource.data.lastOperationId.size()>=16
+    && !exists(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId))
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.kind=='AJUSTE'
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockBefore==resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockAfter==request.resource.data.stock
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.version==request.resource.data.version
+    && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.uid==request.auth.uid;
    match /movements/{movementId} {
     allow get: if boss() || (active() && (!exists(/databases/$(database)/documents/reagents/$(id)/movements/$(movementId)) || resource.data.uid==request.auth.uid));
     allow list: if boss() && request.query.limit!=null && request.query.limit<=20;
@@ -322,18 +338,19 @@ service cloud.firestore {
       && request.resource.data.id==movementId
       && request.resource.data.reagentId==id
       && request.resource.data.uid==request.auth.uid
-      && request.resource.data.kind in ['CONSUMO','ENTRADA']
+      && request.resource.data.kind in ['CONSUMO','ENTRADA','AJUSTE']
       && request.resource.data.quantity is number
       && request.resource.data.quantity>0
       && request.resource.data.measurement is map
       && request.resource.data.notes is string
       && request.resource.data.notes.size()<=500
+      && (request.resource.data.kind!='AJUSTE' || (boss() && request.resource.data.notes.size()>=8))
       && request.resource.data.createdAt==request.time
       && get(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockBefore
       && getAfter(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockAfter
       && getAfter(/databases/$(database)/documents/reagents/$(id)).data.version==request.resource.data.version
       && getAfter(/databases/$(database)/documents/reagents/$(id)).data.lastOperationId==movementId
-      && ((request.resource.data.kind=='CONSUMO' && request.resource.data.stockBefore-request.resource.data.stockAfter >= request.resource.data.quantity-0.000002 && request.resource.data.stockBefore-request.resource.data.stockAfter <= request.resource.data.quantity+0.000002) || (request.resource.data.kind=='ENTRADA' && request.resource.data.stockAfter-request.resource.data.stockBefore >= request.resource.data.quantity-0.000002 && request.resource.data.stockAfter-request.resource.data.stockBefore <= request.resource.data.quantity+0.000002));
+      && ((request.resource.data.kind=='CONSUMO' && request.resource.data.stockBefore-request.resource.data.stockAfter >= request.resource.data.quantity-0.000002 && request.resource.data.stockBefore-request.resource.data.stockAfter <= request.resource.data.quantity+0.000002) || (request.resource.data.kind=='ENTRADA' && request.resource.data.stockAfter-request.resource.data.stockBefore >= request.resource.data.quantity-0.000002 && request.resource.data.stockAfter-request.resource.data.stockBefore <= request.resource.data.quantity+0.000002) || (request.resource.data.kind=='AJUSTE' && (request.resource.data.stockAfter-request.resource.data.stockBefore >= request.resource.data.quantity-0.000002 && request.resource.data.stockAfter-request.resource.data.stockBefore <= request.resource.data.quantity+0.000002 || request.resource.data.stockBefore-request.resource.data.stockAfter >= request.resource.data.quantity-0.000002 && request.resource.data.stockBefore-request.resource.data.stockAfter <= request.resource.data.quantity+0.000002)));
    }
   }
   // Registro inmutable de cada descuento, visible únicamente a su analista y JEFE.
@@ -348,7 +365,8 @@ service cloud.firestore {
     && request.resource.data.planId is string && request.resource.data.reagentId is string
     && request.resource.data.quantity is number && request.resource.data.quantity>0
     && request.resource.data.unit is string && request.resource.data.measurement is map && request.resource.data.notes is string
-    && request.resource.data.notes.size()<=500 && request.resource.data.createdAt==request.time
+    && request.resource.data.notes.size()<=500
+      && (request.resource.data.kind!='AJUSTE' || (boss() && request.resource.data.notes.size()>=8)) && request.resource.data.createdAt==request.time
     && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.analystId==request.auth.uid
     && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.status=='EN_PROCESO'
     && getAfter(/databases/$(database)/documents/reagents/$(request.resource.data.reagentId)/movements/$(op)).data.uid==request.auth.uid

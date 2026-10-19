@@ -186,6 +186,30 @@ export async function consumeReagent({reagentId,operationId,quantity,measurement
   syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;syncState.network='online';syncState.lastEvent='confirmed';emit();return result;
  }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
 }
+// Corrección administrativa con asiento inmutable y transacción idempotente.
+export async function adjustReagent({reagentId,operationId,delta,notes},uid){
+ if(!navigator.onLine)throw Error('Se requiere conexión para confirmar el ajuste.');
+ if(!Number.isFinite(delta)||delta===0)throw Error('El ajuste debe ser distinto de cero.');
+ if(!notes||notes.trim().length<8)throw Error('Explique el motivo del ajuste (mínimo 8 caracteres).');
+ syncState.pending++;syncState.lastEvent='saving';emit();
+ try{
+  const ref=doc(db,'reagents',reagentId),movementRef=doc(db,'reagents',reagentId,'movements',operationId);
+  const result=await runTransaction(db,async tx=>{
+   const old=await tx.get(ref),existing=await tx.get(movementRef);
+   if(existing.exists())return {duplicate:true,stock:existing.data().stockAfter};
+   if(!old.exists())throw Error('El frasco no existe.');
+   const data=old.data(),quantity=Math.round(Math.abs(delta)*1e6)/1e6;
+   if(data.control==='COUNT'&&!Number.isInteger(quantity))throw Error('Los ajustes contables requieren unidades enteras.');
+   const after=Math.round((data.stock+Math.sign(delta)*quantity)*1e6)/1e6;
+   if(after<0)throw Error('El ajuste no puede dejar stock negativo. Disponible: '+data.stock);
+   const version=data.version+1;
+   tx.update(ref,{stock:after,version,updatedAt:serverTimestamp(),updatedBy:uid,lastOperationId:operationId});
+   tx.set(movementRef,{id:operationId,reagentId,uid,kind:'AJUSTE',quantity,unit:data.unit,control:data.control,stockBefore:data.stock,stockAfter:after,version,measurement:{method:'AJUSTE',direction:delta>0?'POSITIVO':'NEGATIVO'},notes:notes.trim(),createdAt:serverTimestamp()});
+   return {duplicate:false,stock:after};
+  });
+  syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;syncState.lastEvent='confirmed';emit();return result;
+ }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
+}
 export async function readReagentMovements(reagentId){
  const ref=collection(db,'reagents',reagentId,'movements');
  const snap=await getDocs(query(ref,orderBy('createdAt','desc'),limit(20)));
