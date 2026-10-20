@@ -135,10 +135,37 @@ export async function saveReagent(item,uid){
    let code=old.exists()?old.data().code:reg?.exists()?reg.data().code:null;
    if(!code){const next=(count.exists()?count.data().last:0)+1;code=`${prefixes[type]}-${String(next).padStart(4,'0')}`;tx.set(counter,{last:next});tx.set(registry,{code,name:item.name.trim(),productType:type,createdAt:serverTimestamp(),createdBy:uid});}
    if(!old.exists() && reg.exists() && reg.data().name.toLocaleLowerCase('es')!==item.name.trim().toLocaleLowerCase('es'))throw Error('Revise el nombre: existe un producto similar.');
-   if(item.control==='LIQUID'&&(!Number.isFinite(Number(item.densityGramsPerMl))||Number(item.densityGramsPerMl)<=0))throw Error('Para líquido pesable registre densidad positiva en g/mL.');if(item.control!=='COUNT'&&(!Number.isFinite(Number(item.tareGrams))||Number(item.tareGrams)<0))throw Error('Ingrese tara válida.');const d={code,name:item.name.trim(),lot:item.lot.trim(),brand:item.brand.trim(),presentation:(item.presentation||'').trim(),productType:item.productType||'REACTIVO',activityIds:item.activityIds||[],control:item.control,unit:item.unit,stock:old.exists()?old.data().stock:Number(item.stock),minStock:Number(item.minStock),status:item.status,tareGrams:Number(item.tareGrams||0),densityGramsPerMl:Number(item.densityGramsPerMl||0),version:old.exists()?Number(old.data().version||0)+1:1,updatedBy:uid,updatedAt:serverTimestamp()};
-   tx.set(ref,{...d,...(old.exists()?{createdAt:old.data().createdAt,createdBy:old.data().createdBy,...(old.data().lastOperationId?{lastOperationId:old.data().lastOperationId}:{})}:{createdAt:serverTimestamp(),createdBy:uid})},{merge:true});
+   if(item.control==='LIQUID'&&(!Number.isFinite(Number(item.densityGramsPerMl))||Number(item.densityGramsPerMl)<=0))throw Error('Para líquido pesable registre densidad positiva en g/mL.');if(item.control!=='COUNT'&&(!Number.isFinite(Number(item.tareGrams))||Number(item.tareGrams)<0))throw Error('Ingrese tara válida.');const d={code,name:item.name.trim(),lot:item.lot.trim(),brand:item.brand.trim(),presentation:(item.presentation||'').trim(),productType:type,activityIds:item.activityIds||[],control:item.control,unit:item.unit,minStock:Number(item.minStock),status:item.status,tareGrams:Number(item.tareGrams||0),densityGramsPerMl:Number(item.densityGramsPerMl||0)};
+   if(old.exists()){
+    const previous=old.data(),changes={};
+    for(const [field,value] of Object.entries(d))if(JSON.stringify(previous[field]??null)!==JSON.stringify(value))changes[field]=value;
+    if(Object.keys(changes).length)tx.update(ref,{...changes,version:previous.version+1,updatedBy:uid,updatedAt:serverTimestamp()});
+   }else{
+    tx.set(ref,{...d,stock:Number(item.stock),version:1,updatedBy:uid,updatedAt:serverTimestamp(),createdAt:serverTimestamp(),createdBy:uid});
+   }
   });
   syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;syncState.lastEvent='confirmed';emit();return id;
+ }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
+}
+
+// Edición administrativa exclusiva: jamás envía saldo, pesaje, lote ni movimientos.
+export async function editReagentHeader({id,name,code,lot,brand,presentation,productType,activityIds},uid){
+ if(!navigator.onLine)throw Error('Se requiere conexión para editar el producto.');
+ if(!id||!name?.trim()||!code?.trim()||!lot?.trim())throw Error('Nombre, código y lote son obligatorios.');
+ if(!['REACTIVO','ESTANDAR','MRC','INSUMO'].includes(productType))throw Error('Tipo de producto inválido.');
+ if(!Array.isArray(activityIds)||activityIds.length>100||new Set(activityIds).size!==activityIds.length)throw Error('Vinculaciones inválidas.');
+ syncState.pending++;emit();
+ try{
+  const ref=doc(db,'reagents',id);
+  await runTransaction(db,async tx=>{
+   const snap=await tx.get(ref);
+   if(!snap.exists())throw Error('El producto ya no existe.');
+   const old=snap.data();const changes={};
+   for(const [key,value] of Object.entries({name:name.trim(),code:code.trim(),lot:lot.trim(),brand:brand.trim(),presentation:presentation.trim(),productType})){if((old[key]??(key==='productType'?'REACTIVO':''))!==value)changes[key]=value;}
+   if(JSON.stringify(old.activityIds||[])!==JSON.stringify(activityIds))changes.activityIds=activityIds;
+   if(Object.keys(changes).length)tx.update(ref,{...changes,version:old.version+1,updatedBy:uid,updatedAt:serverTimestamp()});
+  });
+  syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;emit();return id;
  }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
 }
 

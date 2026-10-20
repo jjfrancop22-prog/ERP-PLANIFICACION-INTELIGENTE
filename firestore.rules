@@ -275,6 +275,19 @@ service cloud.firestore {
    function valid(){let d=request.resource.data;return d.keys().hasOnly(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy','lastOperationId','tareGrams','densityGramsPerMl']) && d.keys().hasAll(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy']) && d.name is string && d.name.size()>0 && d.name.size()<=120 && d.code is string && d.code.size()>0 && d.code.size()<=60 && d.lot is string && d.lot.size()>0 && d.lot.size()<=80 && d.brand is string && d.get('presentation','') is string && d.get('presentation','').size()<=120 && d.get('productType','REACTIVO') in ['REACTIVO','ESTANDAR','MRC','INSUMO'] && d.get('activityIds',[]) is list && d.get('activityIds',[]).size()<=100 && d.get('tareGrams',0) is number && d.get('tareGrams',0)>=0 && d.get('densityGramsPerMl',0) is number && (d.control!='LIQUID' || d.get('densityGramsPerMl',0)>0) && d.control in ['COUNT','SOLID','LIQUID'] && ((d.control=='COUNT' && d.unit=='unidad') || (d.control=='SOLID' && d.unit in ['g','kg']) || (d.control=='LIQUID' && d.unit in ['mL','L'])) && d.stock is number && d.stock>=0 && d.minStock is number && d.minStock>=0 && d.status in ['ACTIVO','INACTIVO'] && d.version is int && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
    allow create: if boss() && valid() && request.resource.data.version==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
    allow update: if boss() && valid() && request.resource.data.version==resource.data.version+1 && request.resource.data.stock==resource.data.stock && request.resource.data.get('lastOperationId','')==resource.data.get('lastOperationId','') && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt;
+   // V29.0.134: edición de encabezado y asignaciones, sin tocar saldo ni mediciones.
+   allow update: if boss()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','code','lot','brand','presentation','productType','activityIds','version','updatedBy','updatedAt'])
+    && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=120
+    && request.resource.data.code is string && request.resource.data.code.size()>0 && request.resource.data.code.size()<=60
+    && request.resource.data.lot is string && request.resource.data.lot.size()>0 && request.resource.data.lot.size()<=80
+    && request.resource.data.brand is string && request.resource.data.brand.size()<=100
+    && request.resource.data.presentation is string && request.resource.data.presentation.size()<=120
+    && request.resource.data.productType in ['REACTIVO','ESTANDAR','MRC','INSUMO']
+    && request.resource.data.activityIds is list && request.resource.data.activityIds.size()<=100
+    && request.resource.data.version==resource.data.version+1
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.updatedAt==request.time;
    allow delete: if false;
 
    // Entrada administrativa: saldo y asiento confirmados conjuntamente.
