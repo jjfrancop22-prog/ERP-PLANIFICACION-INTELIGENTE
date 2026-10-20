@@ -125,18 +125,18 @@ export async function saveReagent(item,uid){
   if(!key.split('_').slice(1).join(''))throw Error('Indique el nombre del producto.');
   await runTransaction(db,async tx=>{
    const old=await tx.get(ref);
-   const reg=await tx.get(registry);
-   const count=!reg.exists()&&!old.exists()?await tx.get(counter):null;
+   const reg=old.exists()?null:await tx.get(registry);
+   const count=!old.exists()&&!reg.exists()?await tx.get(counter):null;
    // Edición de metadatos: usar el saldo confirmado de la transacción.
    // El formulario puede contener un saldo antiguo si otro usuario consumió mientras estaba abierto.
    // Nunca modificar stock ni lastOperationId desde esta operación.
 
-   if(old.exists() && (old.data().code!==item.code || old.data().name!==item.name.trim() || old.data().productType!==type))throw Error('El código, nombre y tipo son permanentes; cree otro producto si corresponde.');
-   let code=old.exists()?old.data().code:reg.exists()?reg.data().code:null;
+   if(old.exists() && (old.data().code!==item.code || old.data().name!==item.name.trim() || (old.data().productType||'REACTIVO')!==type))throw Error('El código, nombre y tipo son permanentes; cree otro producto si corresponde.');
+   let code=old.exists()?old.data().code:reg?.exists()?reg.data().code:null;
    if(!code){const next=(count.exists()?count.data().last:0)+1;code=`${prefixes[type]}-${String(next).padStart(4,'0')}`;tx.set(counter,{last:next});tx.set(registry,{code,name:item.name.trim(),productType:type,createdAt:serverTimestamp(),createdBy:uid});}
    if(!old.exists() && reg.exists() && reg.data().name.toLocaleLowerCase('es')!==item.name.trim().toLocaleLowerCase('es'))throw Error('Revise el nombre: existe un producto similar.');
    if(item.control==='LIQUID'&&(!Number.isFinite(Number(item.densityGramsPerMl))||Number(item.densityGramsPerMl)<=0))throw Error('Para líquido pesable registre densidad positiva en g/mL.');if(item.control!=='COUNT'&&(!Number.isFinite(Number(item.tareGrams))||Number(item.tareGrams)<0))throw Error('Ingrese tara válida.');const d={code,name:item.name.trim(),lot:item.lot.trim(),brand:item.brand.trim(),presentation:(item.presentation||'').trim(),productType:item.productType||'REACTIVO',activityIds:item.activityIds||[],control:item.control,unit:item.unit,stock:old.exists()?old.data().stock:Number(item.stock),minStock:Number(item.minStock),status:item.status,tareGrams:Number(item.tareGrams||0),densityGramsPerMl:Number(item.densityGramsPerMl||0),version:old.exists()?old.data().version+1:1,updatedBy:uid,updatedAt:serverTimestamp()};
-   tx.set(ref,{...d,...(old.exists()?{createdAt:old.data().createdAt,createdBy:old.data().createdBy,...(old.data().lastOperationId?{lastOperationId:old.data().lastOperationId}:{})}:{createdAt:serverTimestamp(),createdBy:uid})},{merge:false});
+   tx.set(ref,{...d,...(old.exists()?{createdAt:old.data().createdAt,createdBy:old.data().createdBy,...(old.data().lastOperationId?{lastOperationId:old.data().lastOperationId}:{})}:{createdAt:serverTimestamp(),createdBy:uid})},{merge:true});
   });
   syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;syncState.lastEvent='confirmed';emit();return id;
  }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
