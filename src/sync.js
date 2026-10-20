@@ -127,7 +127,10 @@ export async function saveReagent(item,uid){
    const old=await tx.get(ref);
    const reg=await tx.get(registry);
    const count=!reg.exists()&&!old.exists()?await tx.get(counter):null;
-   if(old.exists()&&old.data().stock!==item.stock)throw new Error('El stock no se modifica desde la ficha; se actualizará mediante movimientos controlados.');
+   // Edición de metadatos: usar el saldo confirmado de la transacción.
+   // El formulario puede contener un saldo antiguo si otro usuario consumió mientras estaba abierto.
+   // Nunca modificar stock ni lastOperationId desde esta operación.
+
    if(old.exists() && (old.data().code!==item.code || old.data().name!==item.name.trim() || old.data().productType!==type))throw Error('El código, nombre y tipo son permanentes; cree otro producto si corresponde.');
    let code=old.exists()?old.data().code:reg.exists()?reg.data().code:null;
    if(!code){const next=(count.exists()?count.data().last:0)+1;code=`${prefixes[type]}-${String(next).padStart(4,'0')}`;tx.set(counter,{last:next});tx.set(registry,{code,name:item.name.trim(),productType:type,createdAt:serverTimestamp(),createdBy:uid});}
