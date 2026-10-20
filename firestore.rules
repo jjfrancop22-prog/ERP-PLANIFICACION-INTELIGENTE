@@ -308,8 +308,20 @@ service cloud.firestore {
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.stockAfter==request.resource.data.stock
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.version==request.resource.data.version
     && getAfter(/databases/$(database)/documents/reagents/$(id)/movements/$(request.resource.data.lastOperationId)).data.uid==request.auth.uid;
+   // Ajuste administrativo: valida exclusivamente el cambio de saldo y conserva
+   // todos los campos originales, incluso los de frascos históricos.
+   function validAdjustment(){
+    let d=request.resource.data;
+    return d.stock is number && d.stock>=0
+      && d.version is int && resource.data.version is int
+      && d.updatedBy==request.auth.uid && d.updatedAt==request.time
+      && d.createdBy==resource.data.createdBy && d.createdAt==resource.data.createdAt
+      && d.control==resource.data.control && d.unit==resource.data.unit
+      && d.code==resource.data.code && d.lot==resource.data.lot
+      && d.get('lastOperationId','') is string;
+   }
    // Ajuste administrativo: solo JEFE, saldo y asiento atómicos.
-   allow update: if boss() && valid()
+   allow update: if boss() && validAdjustment()
     && request.resource.data.version==resource.data.version+1
     && request.resource.data.createdBy==resource.data.createdBy
     && request.resource.data.createdAt==resource.data.createdAt
@@ -366,7 +378,7 @@ service cloud.firestore {
     && request.resource.data.quantity is number && request.resource.data.quantity>0
     && request.resource.data.unit is string && request.resource.data.measurement is map && request.resource.data.notes is string
     && request.resource.data.notes.size()<=500
-      && (request.resource.data.kind!='AJUSTE' || (boss() && request.resource.data.notes.size()>=8)) && request.resource.data.createdAt==request.time
+      && request.resource.data.createdAt==request.time
     && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.analystId==request.auth.uid
     && get(/databases/$(database)/documents/plannerAssignments/$(request.resource.data.planId)).data.status=='EN_PROCESO'
     && getAfter(/databases/$(database)/documents/reagents/$(request.resource.data.reagentId)/movements/$(op)).data.uid==request.auth.uid
@@ -467,12 +479,13 @@ service cloud.firestore {
   match /journeyTechnical/{planId} {
    function plan(){return get(/databases/$(database)/documents/plannerAssignments/$(planId));}
    function owner(){return active() && plan().data.analystId==request.auth.uid && plan().data.status=='EN_PROCESO';}
-   function validTechnical(){let d=request.resource.data;return d.keys().hasOnly(['analystId','planId','date','revision','sampleCount','parameters','observations','updatedBy','updatedAt','createdBy','createdAt'])
-    && d.keys().hasAll(['analystId','planId','date','revision','sampleCount','parameters','observations','updatedBy','updatedAt','createdBy','createdAt'])
+   function validTechnical(){let d=request.resource.data;return d.keys().hasOnly(['analystId','planId','date','revision','sampleCount','parameters','observations','analytical','updatedBy','updatedAt','createdBy','createdAt'])
+    && d.keys().hasAll(['analystId','planId','date','revision','sampleCount','parameters','observations','analytical','updatedBy','updatedAt','createdBy','createdAt'])
     && d.analystId==request.auth.uid && d.planId==planId && d.date==plan().data.date
     && d.revision is int && d.sampleCount is int && d.sampleCount>=0 && d.sampleCount<=100000
     && d.parameters is list && d.parameters.size()<=100
     && d.observations is string && d.observations.size()<=1000
+    && (d.get('analytical',null)==null || d.get('analytical',null) is map)
     && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
    allow get: if boss() || (active() && exists(/databases/$(database)/documents/plannerAssignments/$(planId)) && plan().data.analystId==request.auth.uid);
    allow list: if false;

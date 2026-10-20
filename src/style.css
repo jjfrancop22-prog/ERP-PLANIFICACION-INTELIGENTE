@@ -742,3 +742,12 @@ html,body,#app,button,input,select,textarea{font-family:var(--psi-font)!importan
 @media(max-width:850px){.main-area .panel{padding:14px}.main-area h1{font-size:22px}.main-area h2{font-size:18px}.main-area td,.main-area th{padding:8px}}
 @media(prefers-reduced-motion:reduce){.main-area button,[class*=modal] button,.main-area input,.main-area select{transition:none!important}}
 .analytical-row{border:1px solid #d6e3ed;border-radius:12px;padding:14px;margin:12px 0;background:#f8fbfe}.analytical-readings{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:10px}.analytical-readings input{width:100%}
+/* V29.0.123: cinco etapas legibles sin una pestaña aislada en segunda fila. */
+.journey-workspace .workspace-steps{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+.journey-workspace .workspace-tab{min-width:0;white-space:normal}
+@media(max-width:650px){.journey-workspace .workspace-steps{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* V29.0.128 — notificaciones discretas, no modales */
+#psi-live-alerts{position:fixed;right:18px;top:76px;z-index:99980;display:flex;flex-direction:column;gap:10px;width:min(370px,calc(100vw - 36px));pointer-events:none}
+.psi-live-card{pointer-events:auto;background:#fff;color:#193b53;border:1px solid #b8d7e7;border-left:5px solid #16749e;border-radius:14px;padding:14px;box-shadow:0 8px 30px #173b5529;font:14px system-ui,sans-serif}
+.psi-live-card strong{font-size:15px}.psi-live-card p{margin:7px 0 12px;line-height:1.4}.psi-live-card>div{display:flex;gap:8px;justify-content:flex-end}.psi-live-card button{border:1px solid #bdd6e5;border-radius:8px;padding:8px 11px;background:#f4f9fc;color:#174d6b;cursor:pointer}
