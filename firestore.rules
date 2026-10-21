@@ -345,6 +345,41 @@ service cloud.firestore {
    && journeyEntry(op).data.uid==request.auth.uid
    && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.analystId==request.auth.uid
    && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.status=='EN_PROCESO';}
+  // Expedientes MRC: registros documentales separados del inventario.
+  match /referenceDossiers/{id} {
+    allow read: if active();
+    allow create: if active() && request.resource.data.updatedBy == request.auth.uid
+      && request.resource.data.origin in ['INVENTARIO','MANUAL']
+      && (request.resource.data.origin == 'INVENTARIO' || boss())
+      && (request.resource.data.reviewStatus != 'APROBADO' || boss());
+    allow update: if active() && request.resource.data.updatedBy == request.auth.uid
+      && request.resource.data.origin == resource.data.origin
+      && request.resource.data.inventoryId == resource.data.inventoryId
+      && request.resource.data.createdBy == resource.data.createdBy
+      && request.resource.data.createdAt == resource.data.createdAt
+      && (boss() || (request.resource.data.reviewStatus == resource.data.reviewStatus
+       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['certifiedValue','certifiedUnit','uncertainty','coverageFactor','confidence','traceability','coaNumber','coaUrl','receivedDate','openedDate','expiryDate','storage','intendedUse','notes','coaStoragePath','coaHash','coaFileName','coaSize','updatedBy','updatedAt'])));
+    allow delete: if false;
+    // V29.0.278: el guardado usa un lote atomico que incluye la revision.
+    // Sin esta subcoleccion autorizada, Firebase rechaza TODO el lote.
+    match /revisions/{revisionId} {
+      allow get, list: if boss();
+      allow create: if active()
+        && request.resource.data.keys().hasOnly(['at','actor','action','changedFields','reviewStatus','coaHash'])
+        && request.resource.data.actor == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.action in ['CREACIÓN','ACTUALIZACIÓN']
+        && request.resource.data.changedFields is list
+        && request.resource.data.changedFields.size() <= 50
+        && request.resource.data.reviewStatus in ['PENDIENTE','APROBADO','RECHAZADO']
+        && (request.resource.data.reviewStatus != 'APROBADO' || boss())
+        && request.resource.data.coaHash is string
+        && request.resource.data.coaHash.size() <= 64
+        && existsAfter(/databases/$(database)/documents/referenceDossiers/$(id))
+        && getAfter(/databases/$(database)/documents/referenceDossiers/$(id)).data.updatedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
   match /reagents/{id} {
    allow read: if active();
    function valid(){let d=request.resource.data;return d.keys().hasOnly(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy','lastOperationId','tareGrams','densityGramsPerMl']) && d.keys().hasAll(['name','code','lot','brand','presentation','productType','activityIds','control','unit','stock','minStock','status','version','updatedBy','updatedAt','createdAt','createdBy']) && d.name is string && d.name.size()>0 && d.name.size()<=120 && d.code is string && d.code.size()>0 && d.code.size()<=60 && d.lot is string && d.lot.size()>0 && d.lot.size()<=80 && d.brand is string && d.get('presentation','') is string && d.get('presentation','').size()<=120 && d.get('productType','REACTIVO') in ['REACTIVO','ESTANDAR','MRC','INSUMO'] && d.get('activityIds',[]) is list && d.get('activityIds',[]).size()<=100 && d.get('tareGrams',0) is number && d.get('tareGrams',0)>=0 && d.get('densityGramsPerMl',0) is number && (d.control!='LIQUID' || d.get('densityGramsPerMl',0)>0) && d.control in ['COUNT','SOLID','LIQUID'] && ((d.control=='COUNT' && d.unit=='unidad') || (d.control=='SOLID' && d.unit in ['g','kg']) || (d.control=='LIQUID' && d.unit in ['mL','L'])) && d.stock is number && d.stock>=0 && d.minStock is number && d.minStock>=0 && d.status in ['ACTIVO','INACTIVO'] && d.version is int && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}

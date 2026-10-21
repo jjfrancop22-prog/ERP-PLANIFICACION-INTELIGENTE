@@ -1,6 +1,6 @@
 {
   "name": "erp-planificacion-nextgen-v29",
-  "version": "29.0.269",
+  "version": "29.0.289",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "firebase": "^12.4.0",
-    "lucide": "^0.468.0"
+    "lucide": "^0.468.0",
+    "pdfjs-dist": "^4.10.38",
+    "qrcode": "^1.5.4",
+    "jspdf": "^2.5.2"
   },
   "devDependencies": {
     "vite": "^7.1.9"
