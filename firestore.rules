@@ -95,7 +95,7 @@ service cloud.firestore {
       && request.resource.data.activityIds is list && request.resource.data.activityIds.size()>0 && request.resource.data.activityIds.size()<=100
       && request.resource.data.min is number && request.resource.data.max is number
       && request.resource.data.min<request.resource.data.max
-      && request.resource.data.kind in ['SIMPLE','MULTIPUNTO']
+      && request.resource.data.kind in ['SIMPLE','MULTIPUNTO','CONDUCTIVIDAD']
       && request.resource.data.equipment is string
       && (request.resource.data.tolerance==null || (request.resource.data.tolerance is number && request.resource.data.tolerance>0))
       && request.resource.data.status=='ACTIVO' && request.resource.data.frequency=='DIARIA'
@@ -110,6 +110,14 @@ service cloud.firestore {
       && request.resource.data.identityUpdatedBy==request.auth.uid
       && request.resource.data.identityUpdatedAt==request.time
       && request.resource.data.identityReason is string && request.resource.data.identityReason.size()>=8 && request.resource.data.identityReason.size()<=500;
+    // Solo JEFE cambia asignaciones, sin alterar identidad, límites o historial.
+    allow update: if boss()
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','activityIds','linksUpdatedBy','linksUpdatedAt'])
+      && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=160
+      && request.resource.data.activityIds is list
+      && request.resource.data.activityIds.size()>0 && request.resource.data.activityIds.size()<=100
+      && request.resource.data.linksUpdatedBy==request.auth.uid
+      && request.resource.data.linksUpdatedAt==request.time;
     allow delete: if false;
   }
   match /controlCardIdentityHistory/{auditId} {
@@ -153,10 +161,36 @@ service cloud.firestore {
       && request.resource.data.digitizedBy==request.auth.uid && request.resource.data.digitizedAt==request.time;
     allow update, delete: if false;
   }
+  // V29.0.199: bloqueo documental cruzado por fecha e identidad estable.
+  function historicalArchiveFree(date, cardId) {
+    return !exists(/databases/$(database)/documents/historicalControlArchive/$(date+'_id-'+cardId));
+  }
+  // V29.0.212: contrato común para registros operativos especializados.
+  // Conserva identidad fecha+carta, autor autenticado, sello de servidor e inmutabilidad.
+  function specialCore(recordId) {
+    let d = request.resource.data;
+    return active()
+      && d.keys().hasAll(['cardId','date','month','time','completedBy','completedAt','conforms','status','responsibleName','observations'])
+      && d.cardId is string && d.cardId.size() > 0 && d.cardId.size() <= 120
+      && d.date is string && d.date.size() == 10
+      && recordId == d.date + '_' + d.cardId
+      && d.date.matches('^' + d.month + '-[0-9]{2}$')
+      && d.time is string && d.time.size() == 5
+      && d.completedBy == request.auth.uid && d.completedAt == request.time
+      && d.responsibleName is string && d.responsibleName.size() > 0 && d.responsibleName.size() <= 200
+      && d.observations is string && d.observations.size() <= 1500
+      && d.conforms is bool
+      && d.status == (d.conforms ? 'COMPLETADA' : 'NO_CONFORME')
+      && historicalArchiveFree(d.date,d.cardId);
+  }
+  function closeNumber(a,b) {
+    return a is number && b is number && a-b <= 0.000001 && b-a <= 0.000001;
+  }
   // Un único documento por día y carta, incluso con dos analistas simultáneos.
   match /dailyControlRecords/{recordId} {
     allow read: if active();
     allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.controlId)
       && request.resource.data.keys().hasOnly(['date','controlId','status','value','unit','min','max','completedBy','completedAt'])
       && recordId==request.resource.data.date+'_'+request.resource.data.controlId
       && request.resource.data.date is string && request.resource.data.date.size()==10
@@ -174,6 +208,7 @@ service cloud.firestore {
       && request.resource.data.value<=request.resource.data.max;
     // V29.0.98: registro multipunto con tres niveles, validación y evidencia no conforme.
     allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.controlId)
       && request.resource.data.keys().hasOnly(['date','controlId','kind','status','readings','errors','nominals','tolerance','conforms','observations','completedBy','completedAt'])
       && recordId==request.resource.data.date+'_'+request.resource.data.controlId
       && request.resource.data.date is string && request.resource.data.date.size()==10
@@ -196,6 +231,46 @@ service cloud.firestore {
       && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.status=='ACTIVO'
       && request.resource.data.tolerance==get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.tolerance
       && request.resource.data.conforms == (request.resource.data.errors[0]<=request.resource.data.tolerance && request.resource.data.errors[0]>=-request.resource.data.tolerance && request.resource.data.errors[1]<=request.resource.data.tolerance && request.resource.data.errors[1]>=-request.resource.data.tolerance && request.resource.data.errors[2]<=request.resource.data.tolerance && request.resource.data.errors[2]>=-request.resource.data.tolerance)
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME');
+    // PEC0404-05: registro diario inmutable, 3 niveles, error relativo ≤5%.
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.controlId)
+      && request.resource.data.keys().hasOnly(['date','controlId','kind','status','readings','errors','relativeErrors','nominals','tolerance','conforms','observations','completedBy','completedAt'])
+      && recordId==request.resource.data.date+'_'+request.resource.data.controlId
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.completedBy==request.auth.uid && request.resource.data.completedAt==request.time
+      && request.resource.data.kind=='CONDUCTIVIDAD'
+      && request.resource.data.nominals==[84,1413,12.88]
+      && request.resource.data.readings is list && request.resource.data.readings.size()==3
+      && request.resource.data.errors is list && request.resource.data.errors.size()==3
+      && request.resource.data.relativeErrors is list && request.resource.data.relativeErrors.size()==3
+      && request.resource.data.readings[0] is number && request.resource.data.readings[0]>=0
+      && request.resource.data.readings[1] is number && request.resource.data.readings[1]>=0
+      && request.resource.data.readings[2] is number && request.resource.data.readings[2]>=0
+      && request.resource.data.errors[0]==request.resource.data.readings[0]-84
+      && request.resource.data.errors[1]==request.resource.data.readings[1]-1413
+      && request.resource.data.errors[2]==request.resource.data.readings[2]-12.88
+      // Firestore Rules no admite división ni multiplicación.
+      // Los porcentajes son informativos; la conformidad se verifica
+      // directamente contra las lecturas y los límites técnicos del ±5%.
+      && request.resource.data.relativeErrors[0] is number
+      && request.resource.data.relativeErrors[1] is number
+      && request.resource.data.relativeErrors[2] is number
+      && request.resource.data.relativeErrors[0]>=0
+      && request.resource.data.relativeErrors[1]>=0
+      && request.resource.data.relativeErrors[2]>=0
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && exists(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId))
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.kind=='CONDUCTIVIDAD'
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.code=='PEC0404-05'
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.status=='ACTIVO'
+      && request.resource.data.tolerance==5
+      && get(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId)).data.tolerance==5
+      && request.resource.data.conforms==(
+        request.resource.data.readings[0]>=79.8 && request.resource.data.readings[0]<=88.2
+        && request.resource.data.readings[1]>=1342.35 && request.resource.data.readings[1]<=1483.65
+        && request.resource.data.readings[2]>=12.236 && request.resource.data.readings[2]<=13.524
+      )
       && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME');
     allow update,delete: if false;
   }
@@ -479,9 +554,11 @@ service cloud.firestore {
     && request.resource.data.updatedBy==request.auth.uid
     && request.resource.data.updatedAt==request.time
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt','finishedBy','finishedAt','closureControlIds','closureConsumptionId'])
-    && exists(catalogPath()) && exists(techPath())
-    && get(techPath()).data.analystId==request.auth.uid
-    && get(techPath()).data.parameters is list && get(techPath()).data.parameters.size()>0
+    && exists(catalogPath())
+    && ((resource.data.activityName.matches('.*[Pp]ermiso.*') || resource.data.activityName.matches('.*[Vv]acaciones.*') || resource.data.activityName.matches('.*[Ll]icencia.*') || resource.data.activityName.matches('.*[Aa]usencia.*') || resource.data.activityName.matches('.*[Dd]escanso.*') || resource.data.activityName.matches('.*[Ff]eriado.*') || resource.data.activityName.matches('.*[Cc]alamidad.*'))
+       && get(catalogPath()).data.get('reactives',[]).size()==0 && get(catalogPath()).data.get('controlIds',[]).size()==0
+       || (get(catalogPath()).data.get('requiresSamples',false)==false && get(catalogPath()).data.get('requiresCurve',false)==false && get(catalogPath()).data.get('analyticalMode','NONE')=='NONE')
+       || (exists(techPath()) && get(techPath()).data.analystId==request.auth.uid && (get(catalogPath()).data.get('requiresSamples',false)==false || (get(techPath()).data.parameters is list && get(techPath()).data.parameters.size()>0))))
     && get(catalogPath()).data.get('controlIds',[]) is list
     && request.resource.data.closureControlIds==get(catalogPath()).data.get('controlIds',[])
     && controlsOk(request.resource.data.closureControlIds)
@@ -505,6 +582,338 @@ service cloud.firestore {
    allow create: if owner() && validTechnical() && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
    allow update: if owner() && validTechnical() && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt;
    allow delete: if false;
+  }
+  // MC1602-08: configuraciones metrológicas inmutables y registros únicos por día.
+  match /environmentalCards/{cardId} {
+    allow read: if active();
+    allow create: if boss() && cardId is string && cardId.size()>0 && cardId.size()<=120
+      && request.resource.data.code is string && request.resource.data.code.size()>0 && request.resource.data.code.size()<=80
+      && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=160
+      && request.resource.data.activityIds is list && request.resource.data.activityIds.size()<=100
+      && request.resource.data.createdBy==request.auth.uid
+      && request.resource.data.createdAt==request.time;
+    allow update: if boss() && cardId is string && cardId.size()>0 && cardId.size()<=120
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','activityIds','linksUpdatedBy','linksUpdatedAt'])
+      && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=160
+      && request.resource.data.activityIds is list
+      && request.resource.data.activityIds.size()>0 && request.resource.data.activityIds.size()<=100
+      && request.resource.data.linksUpdatedBy==request.auth.uid
+      && request.resource.data.linksUpdatedAt==request.time;
+    allow delete: if false;
+  }
+  match /environmentalConfigs/{configId} {
+    allow read: if active();
+    allow create: if boss()
+      && request.resource.data.cardId is string && request.resource.data.cardId.size()>0 && request.resource.data.cardId.size()<=120
+      && existsAfter(/databases/$(database)/documents/environmentalCards/$(request.resource.data.cardId))
+      && configId==request.resource.data.cardId+'_'+request.resource.data.validFrom
+      && request.resource.data.keys().hasOnly(['cardId','validFrom','certificate','reason','minT','maxT','minRH','maxRH','tempRanges','rhRanges','coverageK','method','temperatureOnly','createdBy','createdAt'])
+      && request.resource.data.validFrom is string && request.resource.data.validFrom.size()==10
+      && request.resource.data.certificate is string && request.resource.data.certificate.size()>0
+      && request.resource.data.reason is string && request.resource.data.reason.size()>=8
+      && request.resource.data.minT is number && request.resource.data.maxT is number
+      && request.resource.data.minT<request.resource.data.maxT
+      && (request.resource.data.get('temperatureOnly',false)==true || (request.resource.data.get('minRH',0) is number && request.resource.data.get('minRH',0)>=0 && request.resource.data.get('minRH',0)<request.resource.data.maxRH && request.resource.data.maxRH is number && request.resource.data.maxRH>0 && request.resource.data.maxRH<=100))
+      && request.resource.data.tempRanges is list && request.resource.data.tempRanges.size()>=1 && request.resource.data.tempRanges.size()<=3
+      && request.resource.data.rhRanges is list && request.resource.data.rhRanges.size()>=0 && request.resource.data.rhRanges.size()<=3
+      && request.resource.data.method=='INTERPOLACION_LINEAL'
+      && request.resource.data.coverageK is number && request.resource.data.coverageK>0
+      && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+    allow update,delete: if false;
+  }
+  match /environmentalRecords/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.cardId)
+      && request.resource.data.keys().hasOnly(['cardId','month','date','time','tempRead','rhRead','tempFactor','rhFactor','tempCorrected','rhCorrected','conforms','status','minT','maxT','minRH','maxRH','certificate','configId','configValidFrom','observations','completedBy','responsibleName','completedAt','correctionMethodT','correctionMethodRH','metrologicalReview'])
+      && request.resource.data.cardId is string && request.resource.data.cardId.size()>0 && request.resource.data.cardId.size()<=120
+      && exists(/databases/$(database)/documents/environmentalCards/$(request.resource.data.cardId))
+      && recordId==request.resource.data.date+'_'+request.resource.data.cardId
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.date.matches('^' + request.resource.data.month + '-[0-9]{2}$')
+      && request.resource.data.completedBy==request.auth.uid
+      && request.resource.data.completedAt==request.time
+      && request.resource.data.tempRead is number
+      && (request.resource.data.get('rhRead',null)==null || (request.resource.data.rhRead is number && request.resource.data.rhRead>=0 && request.resource.data.rhRead<=100))
+      && request.resource.data.tempFactor is number
+      && closeNumber(request.resource.data.tempCorrected,request.resource.data.tempRead+request.resource.data.tempFactor)
+      && (request.resource.data.get('rhRead',null)==null || (request.resource.data.rhFactor is number && closeNumber(request.resource.data.rhCorrected,request.resource.data.rhRead+request.resource.data.rhFactor)))
+      && request.resource.data.configValidFrom<=request.resource.data.date
+      && request.resource.data.configId==request.resource.data.cardId+'_'+request.resource.data.configValidFrom
+      && exists(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId))
+      && request.resource.data.minT==get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.minT
+      && request.resource.data.maxT==get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.maxT
+      && (get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.get('temperatureOnly',false)==true ? (request.resource.data.get('rhRead',null)==null && request.resource.data.get('rhCorrected',null)==null) : (request.resource.data.minRH==get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.get('minRH',0) && request.resource.data.maxRH==get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.maxRH))
+      && request.resource.data.certificate==get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.certificate
+      && request.resource.data.get('metrologicalReview',false) is bool
+      && request.resource.data.get('correctionMethodT','') in ['INTERPOLACION_O_FACTOR_VIGENTE','ESTIMACION_PUNTO_CERCANO']
+      && request.resource.data.get('correctionMethodRH','') in ['INTERPOLACION_O_FACTOR_VIGENTE','ESTIMACION_PUNTO_CERCANO','NO_APLICA']
+      && (request.resource.data.metrologicalReview == (request.resource.data.correctionMethodT=='ESTIMACION_PUNTO_CERCANO' || request.resource.data.correctionMethodRH=='ESTIMACION_PUNTO_CERCANO'))
+      && (request.resource.data.metrologicalReview
+        ? (request.resource.data.conforms==false && request.resource.data.status==(
+            (request.resource.data.tempCorrected<request.resource.data.minT || request.resource.data.tempCorrected>request.resource.data.maxT ||
+             (get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.get('temperatureOnly',false)!=true &&
+              (request.resource.data.rhCorrected<request.resource.data.minRH || request.resource.data.rhCorrected>request.resource.data.maxRH)))
+             ? 'NO_CONFORME' : 'REVISION_METROLOGICA'))
+        : (request.resource.data.conforms==(request.resource.data.tempCorrected>=request.resource.data.minT && request.resource.data.tempCorrected<=request.resource.data.maxT && (get(/databases/$(database)/documents/environmentalConfigs/$(request.resource.data.configId)).data.get('temperatureOnly',false)==true || (request.resource.data.rhCorrected>=request.resource.data.minRH && request.resource.data.rhCorrected<=request.resource.data.maxRH))) && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')));
+    allow update,delete: if false;
+  }
+  // PEC0104-06: configuración y vínculos centralizados, JEFE exclusivamente.
+  match /balance227Settings/{id} {
+    allow read: if active() && id=='PEC0104-06-BALANZA-EI227';
+    function valid(){let d=request.resource.data;return id=='PEC0104-06-BALANZA-EI227'
+      && d.keys().hasOnly(['name','activityIds','nominals','tolerances','weights','revision','updatedBy','updatedAt'])
+      && d.name is string && d.name.size()>0 && d.name.size()<=160
+      && d.weights is string && d.weights.size()>0 && d.weights.size()<=50
+      && d.nominals==[1,100] && d.tolerances==[0.001,0.002]
+      && d.activityIds is list && d.activityIds.size()<=100
+      && d.revision is int && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
+    allow create: if boss() && valid() && request.resource.data.revision==1;
+    allow update: if boss() && valid() && request.resource.data.revision==resource.data.revision+1
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','activityIds','weights','revision','updatedBy','updatedAt']);
+    allow delete: if false;
+  }
+  match /balance227SettingsHistory/{id} {
+    allow read: if boss();
+    allow create: if boss() && request.resource.data.keys().hasOnly(['cardId','revision','before','after','reason','updatedBy','updatedAt'])
+      && request.resource.data.cardId=='PEC0104-06-BALANZA-EI227'
+      && request.resource.data.revision is int && request.resource.data.revision>=1
+      && request.resource.data.before is map && request.resource.data.after is map
+      && request.resource.data.reason is string && request.resource.data.reason.size()>=8 && request.resource.data.reason.size()<=500
+      && request.resource.data.updatedBy==request.auth.uid && request.resource.data.updatedAt==request.time;
+    allow update,delete: if false;
+  }
+  // PEC0104-06: nueva carta independiente de balanza EI-227; un registro por día.
+  match /balance227Records/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.cardId)
+      && request.resource.data.keys().hasOnly(['cardId','code','equipment','weights','date','month','time','readings','errors','conforms','status','nominals','tolerances','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.cardId=='PEC0104-06-BALANZA-EI227'
+      && request.resource.data.code=='PEC0104-06'
+      && request.resource.data.equipment=='EI-227'
+      && request.resource.data.weights=='PF/05'
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && recordId==request.resource.data.date+'_'+request.resource.data.cardId
+      && request.resource.data.date.matches('^' + request.resource.data.month + '-[0-9]{2}$')
+      && request.resource.data.time is string && request.resource.data.time.size()==5
+      && request.resource.data.nominals==[1,100]
+      && request.resource.data.tolerances==[0.001,0.002]
+      && request.resource.data.readings is list && request.resource.data.readings.size()==2
+      && request.resource.data.readings[0] is number && request.resource.data.readings[1] is number
+      && request.resource.data.readings[0]>=0 && request.resource.data.readings[1]>=0
+      && request.resource.data.errors is list && request.resource.data.errors.size()==2
+      && request.resource.data.errors[0]==request.resource.data.readings[0]-1
+      && request.resource.data.errors[1]==request.resource.data.readings[1]-100
+      && request.resource.data.conforms==(
+        request.resource.data.readings[0]>=0.999 && request.resource.data.readings[0]<=1.001
+        && request.resource.data.readings[1]>=99.998 && request.resource.data.readings[1]<=100.002)
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && request.resource.data.responsibleName is string && request.resource.data.responsibleName.size()<=200
+      && request.resource.data.completedBy==request.auth.uid
+      && request.resource.data.completedAt==request.time;
+    allow create: if specialCore(recordId)
+      && request.resource.data.cardId == 'PEC0104-06-BALANZA-EI227'
+      && request.resource.data.keys().hasOnly(['cardId','code','equipment','weights','date','month','time','readings','errors','conforms','status','nominals','tolerances','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.readings is list && request.resource.data.readings.size()==2
+      && request.resource.data.errors is list && request.resource.data.errors.size()==2
+      && request.resource.data.readings[0] is number && request.resource.data.readings[1] is number
+      && closeNumber(request.resource.data.errors[0],request.resource.data.readings[0]-1)
+      && closeNumber(request.resource.data.errors[1],request.resource.data.readings[1]-100)
+      && request.resource.data.nominals==[1,100] && request.resource.data.tolerances==[0.001,0.002]
+      && request.resource.data.conforms == (request.resource.data.readings[0]>=0.999 && request.resource.data.readings[0]<=1.001 && request.resource.data.readings[1]>=99.998 && request.resource.data.readings[1]<=100.002);
+    allow update,delete: if false;
+  }
+  // V29.0.173: Digestor NTK EI-154; una lectura diaria inmutable.
+  // V29.0.181: Incubadora DBO5 EI-306. Correcciones independientes y trazabilidad.
+  // EI-306: solo correccion del termometro patron PF/09. Historial anterior inmutable.
+  match /incubator306Settings/{id} {
+    allow read: if active() && id == 'INCUBATOR-EI306';
+    function valid() {
+      let d = request.resource.data;
+      return id == 'INCUBATOR-EI306'
+        && d.keys().hasOnly(['name','equipment','reference','center','min','max','patternCorrection','patternCorrectionBasis','evidence','activityIds','revision','updatedAt','updatedBy','reason'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 160
+        && d.equipment == 'EI-306' && d.reference is string && d.reference.size() > 0
+        && d.center is number && d.min is number && d.max is number
+        && d.min < d.center && d.center < d.max
+        && d.patternCorrection is number
+        && d.patternCorrectionBasis is string && d.evidence is string
+        && d.activityIds is list && d.activityIds.size() <= 100
+        && d.revision is int && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    allow create: if boss() && valid() && request.resource.data.revision == 1;
+    // Permite retirar los campos heredados equipmentCorrection/equipmentCorrectionBasis.
+    allow update: if boss() && valid()
+      && request.resource.data.revision == resource.data.get('revision',0) + 1;
+    allow delete: if false;
+  }
+  match /incubator306Records/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.cardId)
+      && request.resource.data.keys().hasOnly(['cardId','date','month','time','pattern','patternCorrected','conforms','status','center','min','max','patternCorrection','revision','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.cardId == 'INCUBATOR-EI306'
+      && request.resource.data.date is string && request.resource.data.date.size() == 10
+      && recordId == request.resource.data.date + '_INCUBATOR-EI306'
+      && request.resource.data.date.matches('^' + request.resource.data.month + '-[0-9]{2}$')
+      && request.resource.data.time is string && request.resource.data.time.size() == 5
+      && request.resource.data.pattern is number
+      && request.resource.data.patternCorrection is number
+      // Comparación con margen de redondeo IEEE-754 (p. ej. 19.9 + 0.001).
+      && request.resource.data.patternCorrected is number
+      && request.resource.data.patternCorrected - (request.resource.data.pattern + request.resource.data.patternCorrection) <= 0.000001
+      && (request.resource.data.pattern + request.resource.data.patternCorrection) - request.resource.data.patternCorrected <= 0.000001
+      && request.resource.data.center is number && request.resource.data.min is number && request.resource.data.max is number
+      && request.resource.data.min < request.resource.data.center && request.resource.data.center < request.resource.data.max
+      && request.resource.data.conforms == (request.resource.data.patternCorrected >= request.resource.data.min && request.resource.data.patternCorrected <= request.resource.data.max)
+      && request.resource.data.status == (request.resource.data.conforms ? 'COMPLETADA' : 'NO_CONFORME')
+      && request.resource.data.revision is int
+      && request.resource.data.observations is string && request.resource.data.observations.size() <= 1500
+      && request.resource.data.responsibleName is string
+      && request.resource.data.completedBy == request.auth.uid && request.resource.data.completedAt == request.time;
+    // Contrato V212: comprueba el dato enviado sin exigir campos de configuración ajenos al registro.
+    allow create: if specialCore(recordId)
+      && request.resource.data.cardId == 'INCUBATOR-EI306'
+      && request.resource.data.keys().hasOnly(['cardId','date','month','time','pattern','patternCorrected','conforms','status','center','min','max','patternCorrection','revision','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.pattern is number && request.resource.data.patternCorrection is number
+      && closeNumber(request.resource.data.patternCorrected,request.resource.data.pattern+request.resource.data.patternCorrection)
+      && request.resource.data.min is number && request.resource.data.max is number
+      && request.resource.data.min < request.resource.data.max
+      && request.resource.data.conforms == (request.resource.data.patternCorrected >= request.resource.data.min && request.resource.data.patternCorrected <= request.resource.data.max);
+    allow update, delete: if false;
+  }
+  match /thermalControlSettings/{id} {
+    allow read: if active() && id in ['NTK-EI154-370','HACH-EI161-150','N105-EI161-105','EST-EI316-104','MICRO365-EI365-35','BATH364-EI364-44P5','MUFLA-EI328-550','DQO-EI360-150'];
+    function valid(){let d=request.resource.data;return id in ['NTK-EI154-370','HACH-EI161-150','N105-EI161-105','EST-EI316-104','MICRO365-EI365-35','BATH364-EI364-44P5','MUFLA-EI328-550','DQO-EI360-150']
+      && d.keys().hasOnly(['name','equipment','reference','center','min','max','correction','correctionBasis','evidence','activityIds','revision','updatedBy','updatedAt'])
+      && d.name is string && d.name.size()>0 && d.name.size()<=160
+      && d.equipment==(id=='NTK-EI154-370'?'EI-154':id=='BATH364-EI364-44P5'?'EI-364':id=='MICRO365-EI365-35'?'EI-365':id=='EST-EI316-104'?'EI-316':id=='MUFLA-EI328-550'?'EI-328':id=='DQO-EI360-150'?'EI-360':'EI-161') && d.reference is string && d.reference.size()>0
+      && d.center is number && d.min is number && d.max is number
+      && d.min<d.max && d.center>=d.min && d.center<=d.max
+      && d.min>=-100 && d.max<=600
+      && d.correction is number && d.correction>=-30 && d.correction<=30
+      && d.correctionBasis in ['PROVISIONAL','DOCUMENTADA']
+      && (d.correctionBasis!='DOCUMENTADA' || (d.get('evidence','') is string && d.get('evidence','').size()>=5))
+      && d.activityIds is list && d.activityIds.size()<=100
+      && d.revision is int && d.updatedBy==request.auth.uid && d.updatedAt==request.time;}
+    allow create: if boss() && valid() && request.resource.data.revision==1;
+    allow update: if boss() && valid() && request.resource.data.revision==resource.data.revision+1
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','reference','center','min','max','correction','correctionBasis','evidence','activityIds','revision','updatedBy','updatedAt']);
+    allow delete: if false;
+  }
+  match /thermalControlRecords/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.cardId)
+      && request.resource.data.keys().hasOnly(['cardId','code','equipment','reference','date','month','time','reading','corrected','conforms','status','correction','correctionBasis','configRevision','center','min','max','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.cardId in ['NTK-EI154-370','HACH-EI161-150','N105-EI161-105','EST-EI316-104','MICRO365-EI365-35','BATH364-EI364-44P5','MUFLA-EI328-550','DQO-EI360-150']
+      && recordId==request.resource.data.date+'_'+request.resource.data.cardId
+      && request.resource.data.code==(request.resource.data.cardId=='BATH364-EI364-44P5'?'BATH364-EI364':request.resource.data.cardId=='MICRO365-EI365-35'?'MICRO365-EI365':request.resource.data.cardId=='NTK-EI154-370'?'NTK-EI154':request.resource.data.cardId=='N105-EI161-105'?'N105-EI161':request.resource.data.cardId=='EST-EI316-104'?'EST-EI316':request.resource.data.cardId=='MUFLA-EI328-550'?'MUFLA-EI328':request.resource.data.cardId=='DQO-EI360-150'?'DQO-EI360':'HACH-EI161') && request.resource.data.equipment==(request.resource.data.cardId=='BATH364-EI364-44P5'?'EI-364':request.resource.data.cardId=='MICRO365-EI365-35'?'EI-365':request.resource.data.cardId=='NTK-EI154-370'?'EI-154':request.resource.data.cardId=='EST-EI316-104'?'EI-316':request.resource.data.cardId=='MUFLA-EI328-550'?'EI-328':request.resource.data.cardId=='DQO-EI360-150'?'EI-360':'EI-161')
+      && request.resource.data.reference is string
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.date.matches('^' + request.resource.data.month + '-[0-9]{2}$')
+      && request.resource.data.time is string && request.resource.data.time.size()==5
+      && request.resource.data.reading is number && request.resource.data.reading>=-100 && request.resource.data.reading<=600
+      && request.resource.data.correction is number
+      // Evita rechazos por precisión decimal sin admitir cambios metrológicos relevantes.
+      && request.resource.data.corrected is number
+      && request.resource.data.corrected-(request.resource.data.reading+request.resource.data.correction)<=0.000001
+      && (request.resource.data.reading+request.resource.data.correction)-request.resource.data.corrected<=0.000001
+      && request.resource.data.center is number && request.resource.data.min is number && request.resource.data.max is number
+      && request.resource.data.min>=-100 && request.resource.data.max<=600
+      && request.resource.data.min<request.resource.data.max
+      && request.resource.data.center>=request.resource.data.min && request.resource.data.center<=request.resource.data.max
+      && request.resource.data.conforms==(request.resource.data.corrected>=request.resource.data.min && request.resource.data.corrected<=request.resource.data.max)
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
+      && request.resource.data.correctionBasis in ['PROVISIONAL','DOCUMENTADA']
+      && request.resource.data.configRevision is int
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && request.resource.data.responsibleName is string && request.resource.data.responsibleName.size()<=200
+      && request.resource.data.completedBy==request.auth.uid && request.resource.data.completedAt==request.time;
+    allow create: if specialCore(recordId)
+      && request.resource.data.cardId in ['NTK-EI154-370','HACH-EI161-150','N105-EI161-105','EST-EI316-104','MICRO365-EI365-35','BATH364-EI364-44P5','MUFLA-EI328-550','DQO-EI360-150']
+      && request.resource.data.keys().hasOnly(['cardId','code','equipment','reference','date','month','time','reading','corrected','conforms','status','correction','correctionBasis','configRevision','center','min','max','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.reading is number && request.resource.data.reading >= -100 && request.resource.data.reading <= 600
+      && request.resource.data.correction is number && request.resource.data.correction >= -30 && request.resource.data.correction <= 30
+      && closeNumber(request.resource.data.corrected,request.resource.data.reading+request.resource.data.correction)
+      && request.resource.data.min is number && request.resource.data.max is number
+      && request.resource.data.min < request.resource.data.max
+      && request.resource.data.conforms == (request.resource.data.corrected >= request.resource.data.min && request.resource.data.corrected <= request.resource.data.max)
+      && request.resource.data.correctionBasis in ['PROVISIONAL','DOCUMENTADA'];
+    allow update,delete: if false;
+  }
+  // V29.0.190: destilador EI-329, resistividad sin corrección; registros independientes.
+  match /distiller329Settings/{id} {
+    allow read: if active() && id=='DIST-EI329-RES';
+    allow create, update: if boss() && id=='DIST-EI329-RES'
+      && request.resource.data.keys().hasOnly(['name','equipment','activityIds','revision','updatedBy','updatedAt'])
+      && request.resource.data.name=='Carta de control del destilador EI-329'
+      && request.resource.data.equipment=='EI-329'
+      && request.resource.data.activityIds is list && request.resource.data.activityIds.size()<=100
+      && request.resource.data.revision is int
+      && request.resource.data.revision==(resource==null?1:resource.data.revision+1)
+      && request.resource.data.updatedBy==request.auth.uid && request.resource.data.updatedAt==request.time;
+    allow delete: if false;
+  }
+  match /distiller329Records/{recordId} {
+    allow read: if active();
+    allow create: if active()
+      && historicalArchiveFree(request.resource.data.date, request.resource.data.cardId)
+      && request.resource.data.keys().hasOnly(['cardId','equipment','date','month','time','reading','conforms','status','unit','min','max','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.cardId=='DIST-EI329-RES' && request.resource.data.equipment=='EI-329'
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && recordId==request.resource.data.date+'_DIST-EI329-RES'
+      && request.resource.data.date.matches('^' + request.resource.data.month + '-[0-9]{2}$')
+      && request.resource.data.time is string && request.resource.data.time.size()==5
+      && request.resource.data.reading is number && request.resource.data.reading>=0 && request.resource.data.reading<=100
+      && request.resource.data.unit=='MΩ·cm' && request.resource.data.min==15 && request.resource.data.max==20
+      && request.resource.data.conforms==(request.resource.data.reading>=15 && request.resource.data.reading<=20)
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && request.resource.data.responsibleName is string && request.resource.data.responsibleName.size()<=200
+      && request.resource.data.completedBy==request.auth.uid && request.resource.data.completedAt==request.time;
+    allow create: if specialCore(recordId)
+      && request.resource.data.cardId == 'DIST-EI329-RES'
+      && request.resource.data.keys().hasOnly(['cardId','equipment','date','month','time','reading','conforms','status','unit','min','max','observations','completedBy','responsibleName','completedAt'])
+      && request.resource.data.reading is number && request.resource.data.reading >= 0 && request.resource.data.reading <= 100
+      && request.resource.data.unit == 'MΩ·cm'
+      && request.resource.data.min == 15 && request.resource.data.max == 20
+      && request.resource.data.conforms == (request.resource.data.reading>=15 && request.resource.data.reading<=20);
+    allow update,delete: if false;
+  }
+  // V29.0.195: archivo documental histórico; inmutable y solo JEFE escribe.
+  match /historicalControlArchive/{recordId} {
+    allow read: if active();
+    // Archivo inmutable; validación del documento y su identidad canónica.
+    // La conformidad técnica histórica requiere cotejo documental por el JEFE.
+    allow create: if boss()
+      && request.resource.data.keys().hasOnly(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.keys().hasAll(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.origin=='HISTORICO_MANUAL'
+      && request.resource.data.date is string && request.resource.data.date.size()==10
+      && request.resource.data.cardId is string && request.resource.data.cardId.size()>0 && request.resource.data.cardId.size()<=100
+      && request.resource.data.cardKey=='id-'+request.resource.data.cardId
+      && recordId==request.resource.data.date+'_'+request.resource.data.cardKey
+      && request.resource.data.cardName is string && request.resource.data.cardName.size()>0 && request.resource.data.cardName.size()<=180
+      && request.resource.data.family in ['PH','CONDUCTIVIDAD','BALANZA','AMBIENTAL','TERMICO','PATRON','TEMPERATURA','RESISTIVIDAD','GENERAL']
+      && request.resource.data.readings is list && request.resource.data.readings.size()>=1 && request.resource.data.readings.size()<=3
+      && request.resource.data.corrected is list && request.resource.data.corrected.size()==request.resource.data.readings.size()
+      && request.resource.data.correction is number && request.resource.data.correction>=-30 && request.resource.data.correction<=30
+      && request.resource.data.corrections is list && request.resource.data.corrections.size()==request.resource.data.readings.size()
+      && request.resource.data.correctionBasis in ['PATRON','EQUIPO','NINGUNA']
+      && request.resource.data.certificate is string && request.resource.data.certificate.size()>=5 && request.resource.data.certificate.size()<=200
+      && request.resource.data.criterion is string && request.resource.data.criterion.size()>=5 && request.resource.data.criterion.size()<=200
+      && request.resource.data.conforms is bool
+      && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
+      && request.resource.data.responsibleName is string && request.resource.data.responsibleName.size()>0 && request.resource.data.responsibleName.size()<=160
+      && request.resource.data.source is string && request.resource.data.source.size()>=3 && request.resource.data.source.size()<=200
+      && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
+      && request.resource.data.digitizedBy==request.auth.uid && request.resource.data.digitizedAt==request.time
+      && !exists(/databases/$(database)/documents/dailyControlRecords/$(request.resource.data.date+'_'+request.resource.data.cardId));
+    allow update, delete: if false;
   }
   match /{document=**} {allow read,write:if false;}
  }

@@ -22,9 +22,13 @@ export function watchShared(key,ref,callback,onError){
   entry.unsubscribe=onSnapshot(ref,{includeMetadataChanges:true},snap=>{
    setMetadata(snap);
    // Los cambios de metadatos NO reconstruyen formularios ni provocan nuevas consultas.
-   const signature=snap.docs?JSON.stringify(snap.docChanges().map(c=>[c.type,c.doc.id,c.doc.data()])):JSON.stringify([snap.exists(),snap.data()]);
-   const changed=entry.value===undefined||signature!=='[]'&&signature!==entry.signature;
-   entry.value=snap;entry.signature=signature;
+   // Firestore ya calcula los cambios reales de la consulta. Evitar serializar
+   // todos los documentos en cada aviso (especialmente en el planificador).
+   // Las actualizaciones exclusivamente de metadatos no fuerzan repintados.
+   const changed=snap.docs ? (entry.value===undefined||snap.docChanges().length>0)
+     : (entry.value===undefined||snap.exists()!==entry.value.exists()||
+        (snap.exists()&&JSON.stringify(snap.data())!==JSON.stringify(entry.value.data())));
+   entry.value=snap;
    if(changed)for(const cb of [...entry.callbacks])cb(snap);
   },err=>{logError(err);onError?.(err)});
  }
@@ -69,10 +73,30 @@ export const watchDailyControls=(date,cb,err)=>watchShared('dailyControls:'+date
 export async function saveControlCard({id,name,code,activityIds,min,max,unit,kind="SIMPLE",equipment="",tolerance=0.1},uid){
  if(!navigator.onLine)throw Error('Sin conexión.');
  if(!name?.trim()||!code?.trim()||!activityIds?.length||!Number.isFinite(min)||!Number.isFinite(max)||min>=max)throw Error('Configure nombre, código, ensayos y límites válidos.');
- if(kind==='MULTIPUNTO'&&(!Number.isFinite(tolerance)||tolerance<=0))throw Error('Tolerancia multipunto inválida.');
+ if(['MULTIPUNTO','CONDUCTIVIDAD'].includes(kind)&&(!Number.isFinite(tolerance)||tolerance<=0))throw Error('Tolerancia multipunto inválida.');
  const ref=doc(db,'controlCards',id||crypto.randomUUID());
- await runTransaction(db,async tx=>{const old=await tx.get(ref);if(old.exists())throw Error('La carta ya existe. Edición pendiente de control de cambios.');tx.set(ref,{name:name.trim(),code:code.trim(),activityIds,status:'ACTIVO',frequency:'DIARIA',min,max,unit:unit||'',kind,equipment:equipment.trim(),tolerance:kind==='MULTIPUNTO'?tolerance:null,createdBy:uid,createdAt:serverTimestamp()});});
+ // Creación con ID aleatorio: evita la lectura previa de la transacción, que puede
+ // fallar por reglas get aunque la creación esté permitida. No modifica cartas existentes.
+ try {
+  await setDoc(ref,{name:name.trim(),code:code.trim(),activityIds,status:'ACTIVO',frequency:'DIARIA',min,max,unit:unit||'',kind,equipment:equipment.trim(),tolerance:['MULTIPUNTO','CONDUCTIVIDAD'].includes(kind)?tolerance:null,createdBy:uid,createdAt:serverTimestamp()});
+ } catch(err) {
+  if(err?.code==='permission-denied')throw Error('Firebase rechazó la creación en controlCards (permission-denied). Compruebe que firestore.rules esté PUBLICADO en el proyecto erp-planificacion-nextgen-v29 y que su perfil users/{uid} tenga status ACTIVO y role JEFE. No se ha guardado la carta.');
+  throw err;
+ }
  return ref.id;
+}
+// Vinculación administrativa independiente de las mediciones históricas.
+export async function updateControlCardLinks(cardId,activityIds,uid){
+ if(!navigator.onLine)throw Error('Se requiere conexión para confirmar las vinculaciones.');
+ const ids=[...new Set(activityIds)];
+ if(!ids.length||ids.length>100)throw Error('Seleccione entre 1 y 100 actividades.');
+ const ref=doc(db,'controlCards',cardId);
+ await runTransaction(db,async tx=>{
+  const snapshot=await tx.get(ref);
+  if(!snapshot.exists()||snapshot.data().status!=='ACTIVO')throw Error('La carta no está activa.');
+  tx.update(ref,{activityIds:ids,linksUpdatedBy:uid,linksUpdatedAt:serverTimestamp()});
+ });
+ return ids.length;
 }
 // V29.0.109: corrección administrativa de identificación, sin alterar controles históricos.
 export async function completeDailyControl(card,date,value,uid){
@@ -313,7 +337,8 @@ export async function finishJourneyActivity(plan,activity,uid,linkedCards=[]){
    if(d.analystId!==uid)throw Error('Actividad asignada a otro analista.');
    if(d.status==='REALIZADO'&&d.finishedBy===uid)return {already:true};
    if(d.status!=='EN_PROCESO')throw Error('Solo se puede finalizar una actividad EN PROCESO.');
-   if(!ts.exists()||ts.data().sampleCount<0||!Array.isArray(ts.data().parameters)||!ts.data().parameters.length)throw Error('Datos técnicos pendientes.');
+   const administrative=/\b(?:permiso(?:s)?(?:\s+laboral)?|vacaciones|licencia(?:s)?|ausencia(?:s)?|descanso(?:s)?(?:\s+m[eé]dico)?|feriado(?:s)?|calamidad(?:\s+dom[eé]stica)?)\b/i.test(String(d.activityName||'')) && !(c.reactives||[]).length && !(c.controlIds||[]).length;
+   if(!administrative&&(c.requiresSamples===true||c.requiresCurve===true||!['NONE','',null,undefined].includes(c.analyticalMode))&&(!ts.exists()||ts.data().sampleCount<0||(c.requiresSamples===true&&(!Array.isArray(ts.data().parameters)||!ts.data().parameters.length))))throw Error('Datos técnicos pendientes.');
    const ids=c.controlIds==null?[]:c.controlIds;
    if(!Array.isArray(ids)||ids.length>5||ids.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(id))||new Set(ids).size!==ids.length)throw Error('Configuración inválida de cartas obligatorias. Revise la ficha en Catálogo Maestro.');
    const cardRefs=ids.map(id=>doc(db,'dailyControlRecords',d.date+'_'+id));
@@ -415,13 +440,15 @@ export async function readJourneyClosureChecklist(plan,activity,linked=[]){
  const [technical,consumptions]=await Promise.all([readJourneyTechnical(plan.id),readJourneyConsumptions(plan.id)]);
  const ids=[...new Set([...(Array.isArray(activity?.controlIds)?activity.controlIds:[]),...linked.filter(c=>c.status==='ACTIVO'&&c.activityIds?.includes(plan.activityId)).map(c=>c.id)])];
  const cards=await readSharedDailyControls(plan.date,ids);
- const technicalOk=!!(technical&&technical.sampleCount>=0&&Array.isArray(technical.parameters)&&technical.parameters.length>0);
+ const administrative=/\b(?:permiso(?:s)?(?:\s+laboral)?|vacaciones|licencia(?:s)?|ausencia(?:s)?|descanso(?:s)?(?:\s+m[eé]dico)?|feriado(?:s)?|calamidad(?:\s+dom[eé]stica)?)\b/i.test(String(plan.activityName||'')) && !(activity?.reactives||[]).length && !(activity?.controlIds||[]).length;
+ const needsTechnical=activity?.requiresSamples===true||activity?.requiresCurve===true||!['NONE','',null,undefined].includes(activity?.analyticalMode);
+ const technicalOk=administrative||!needsTechnical||!!(technical&&technical.sampleCount>=0&&(!activity?.requiresSamples||(Array.isArray(technical.parameters)&&technical.parameters.length>0)));
  const reagentsConfigured=Array.isArray(activity?.reactives)&&activity.reactives.length>0;
  const reagentOk=!reagentsConfigured||consumptions.length>0;
  // Fallo seguro: sin mapeo de cartas no se declara conforme.
  const controlsOk=ids.length<=5&&cards.length===ids.length&&cards.every(x=>x.complete);
  const items=[
-  {title:'Datos técnicos y muestras',ok:technicalOk,message:technicalOk?'Registro disponible en Firebase':'Falta el registro técnico completo'},
+  {title:'Datos técnicos y muestras',ok:technicalOk,message:administrative||!needsTechnical?'No aplica: el Catálogo Maestro no exige registro técnico':technicalOk?'Registro disponible en Firebase':'Falta el registro técnico completo'},
   {title:'Consumos de reactivos',ok:reagentOk,message:reagentOk?`${consumptions.length} consumo(s) registrados o actividad sin reactivos configurados`:'Falta registrar el consumo vinculado'},
   {title:'Cartas de control compartidas',ok:controlsOk,message:!ids.length?'No aplica: esta actividad no tiene cartas obligatorias asignadas':cards.filter(x=>x.complete).length+' de '+ids.length+' completadas para '+plan.date}
  ];
@@ -527,4 +554,23 @@ export async function readManualControlHistory(cardId,month){
  const start=month+'-01',end=new Date(Date.UTC(+month.slice(0,4),+month.slice(5),1)).toISOString().slice(0,10);
  const snap=await getDocs(query(collection(db,'manualControlHistory'),where('date','>=',start),where('date','<',end),limit(250)));
  return snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.controlId===cardId);
+}
+
+// PEC0404-05: control multipunto específico del conductímetro EI-104.
+export async function completeConductivityControl(card,date,readings,uid,observations=''){
+ if(!navigator.onLine)throw Error('Se requiere conexión a Firebase.');
+ const nominal=[84,1413,12.88],values=readings.map(Number);
+ if(readings.some(v=>String(v).trim()==='')||values.some(v=>!Number.isFinite(v)||v<0))throw Error('Ingrese las tres lecturas válidas.');
+ const ref=doc(db,'dailyControlRecords',date+'_'+card.id),masterRef=doc(db,'controlCards',card.id);
+ syncState.pending++;emit();try{
+ await runTransaction(db,async tx=>{
+ const [old,master]=await Promise.all([tx.get(ref),tx.get(masterRef)]);
+ if(old.exists())throw Error('Ya existe un registro de esta carta para la fecha.');
+ if(!master.exists()||master.data().status!=='ACTIVO'||master.data().kind!=='CONDUCTIVIDAD'||master.data().code!=='PEC0404-05')throw Error('Carta PEC0404-05 no disponible.');
+ const tolerance=Number(master.data().tolerance);if(tolerance!==5)throw Error('El criterio de la carta debe ser ±5%.');
+ const errors=values.map((v,i)=>v-nominal[i]),relativeErrors=errors.map((v,i)=>Math.abs(v/nominal[i]*100));
+ const conforms=relativeErrors.every(v=>v<=5+1e-9);
+ tx.set(ref,{date,controlId:card.id,kind:'CONDUCTIVIDAD',status:conforms?'COMPLETADA':'NO_CONFORME',readings:values,errors,relativeErrors,nominals:nominal,tolerance,conforms,observations:String(observations).slice(0,1500),completedBy:uid,completedAt:serverTimestamp()});
+ });syncState.lastConfirmed=new Date();syncState.lastEvent='confirmed';emit();
+ }finally{syncState.pending=Math.max(0,syncState.pending-1);emit();}
 }

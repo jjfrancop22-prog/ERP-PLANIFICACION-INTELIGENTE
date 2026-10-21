@@ -751,3 +751,94 @@ html,body,#app,button,input,select,textarea{font-family:var(--psi-font)!importan
 #psi-live-alerts{position:fixed;right:18px;top:76px;z-index:99980;display:flex;flex-direction:column;gap:10px;width:min(370px,calc(100vw - 36px));pointer-events:none}
 .psi-live-card{pointer-events:auto;background:#fff;color:#193b53;border:1px solid #b8d7e7;border-left:5px solid #16749e;border-radius:14px;padding:14px;box-shadow:0 8px 30px #173b5529;font:14px system-ui,sans-serif}
 .psi-live-card strong{font-size:15px}.psi-live-card p{margin:7px 0 12px;line-height:1.4}.psi-live-card>div{display:flex;gap:8px;justify-content:flex-end}.psi-live-card button{border:1px solid #bdd6e5;border-radius:8px;padding:8px 11px;background:#f4f9fc;color:#174d6b;cursor:pointer}
+
+.cc-template-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0}.cc-template-tools small{color:#54718b}
+/* MC1602-08 · Control ambiental */
+.env-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0}.env-summary>div,.env-box{border:1px solid #dce7f2;border-radius:15px;padding:16px;background:#f7fafd}.env-summary strong{display:block;color:#183b5b;font-size:18px;margin-top:8px}.env-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}.env-box{background:#fff}.env-box label{display:block;margin:10px 0}.env-box input,.env-box textarea{width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #cadbea;border-radius:8px}.env-alert{background:#fff1dc;border-radius:10px;padding:14px;color:#825200}.env-ok{background:#e4f6ed;padding:12px;border-radius:10px}.env-history{overflow:auto;max-height:350px}.env-history table{border-collapse:collapse;width:100%;font-size:12px}.env-history th,.env-history td{padding:8px;border-bottom:1px solid #e1e9f2;white-space:nowrap}@media(max-width:750px){.env-summary,.env-two{grid-template-columns:1fr}}
+
+/* V29.0.147: integración visual de cartas ambientales con el catálogo de cartas */
+.env-integrated{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:14px 0;padding:18px;border:1px solid #cfe0ed;border-radius:14px;background:#f6faff}.env-integrated strong{color:#173d5b}.env-integrated p{margin:7px 0}.env-actions{display:flex;gap:10px;flex-wrap:wrap}.env-actions button{min-height:42px}
+
+/* V152: presentación única de cartas y acciones consistentes */
+.env-unified{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;}
+.env-unified>div:first-child{flex:1 1 350px;min-width:0;}
+.env-unified .env-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.env-unified strong{font-size:1.06rem;}
+.env-unified p{margin:8px 0;color:#526c87;}
+.env-unified small{color:#607b91;}
+#environmentModal [hidden]{display:none!important;}
+
+/* V154 · Cartas compactas y gestión estadística única */
+.control-card-grid{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+.control-card-grid>.control-card{display:flex!important;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 16px!important;border:1px solid #dce7f1;border-radius:14px;min-height:0!important}
+.control-card-grid>.control-card>div:first-child{flex:1 1 360px;min-width:240px}
+.control-card-grid>.control-card p{margin:5px 0!important;font-size:13px}
+.control-card-grid>.control-card small{font-size:12px}
+.control-card-grid .env-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.control-card-grid .env-actions button{padding:10px 12px!important;font-size:13px!important;white-space:normal}
+.cc-unified-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:16px 0}
+.cc-unified-toolbar label:first-child{flex:1 1 350px}.cc-unified-toolbar label{display:flex;flex-direction:column;gap:6px;font-weight:600}
+.cc-unified-toolbar select,.cc-unified-toolbar input{max-width:100%;min-height:40px}
+.cc-unified-internal{display:none!important}
+.cc-unified #ccUnifiedResults>section{padding:0!important;box-shadow:none!important;border:0!important}
+.cc-unified-diagnosis{background:#eef5fb;padding:13px;border-radius:10px}
+@media(max-width:800px){.control-card-grid>.control-card{display:block!important}.control-card-grid .env-actions{margin-top:10px}.cc-unified-toolbar label{width:100%}}
+.cc-unified #ccUnifiedResults>section>label,.cc-unified #ccUnifiedResults>section>#condReload{display:none!important}
+
+/* V29.0.159 — listado maestro compacto */
+.cc-master-collapse{border:1px solid #dce8f1;border-radius:14px;padding:12px 14px;margin-top:12px;background:#fff}
+.cc-master-collapse>summary{cursor:pointer;font-weight:750;color:#173e5a;padding:9px 4px;list-style:revert}
+.cc-master-hint{font-size:12px;font-weight:500;color:#627c91;margin-left:12px}
+.cc-master-collapse .control-card-grid{margin-top:12px}
+.cc-master-collapse .control-card-grid>[hidden]{display:none!important}
+.cc-master-more{text-align:center;margin:12px 0 4px}
+
+/* V29.0.162: dictamen metrológico inequívoco en todas las cartas ambientales */
+.metro-neutral,.metro-conforme,.metro-no-conforme,.metro-review{border-radius:12px;padding:14px 16px;line-height:1.55;font-weight:650;border:1px solid transparent;white-space:normal;}
+.metro-neutral{background:#edf4fa;color:#244663;border-color:#d5e3ef;}
+.metro-conforme{background:#e6f7ec!important;color:#14643b!important;border-color:#81cda0!important;}
+.metro-no-conforme{background:#fde8e8!important;color:#a51f28!important;border-color:#e9a3a7!important;}
+.metro-review{background:#fff0d7!important;color:#925000!important;border-color:#edbf73!important;}
+
+/* V29.0.169 — Balanza EI-227: interfaz compacta y adaptable */
+.b227-overlay{position:fixed;inset:0;background:#132e46a8;z-index:10000;overflow-y:auto;padding:clamp(10px,3vw,28px);display:flex;align-items:flex-start;justify-content:center}
+.b227-dialog{background:#fff;max-width:1120px;width:100%;border-radius:20px;padding:clamp(18px,3vw,32px);color:#17344d;box-shadow:0 24px 70px #0d294955}
+.b227-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:20px}
+.b227-heading h2{font-size:clamp(22px,2.4vw,30px);margin:8px 0 10px}
+.b227-heading small{color:#14618a;letter-spacing:.12em;font-weight:800}
+.b227-dialog .cc100-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.b227-dialog .cc100-kpis>div{min-width:0;padding:18px;border:1px solid #dce8f2;border-radius:15px;background:#f6f9fc}
+.b227-dialog .cc100-kpis strong{display:block;margin-top:8px;font-size:clamp(17px,2vw,23px);line-height:1.4;overflow-wrap:anywhere}
+.b227-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;margin-bottom:22px}
+.b227-dialog .cc100-card{border:1px solid #dce8f2;border-radius:16px;padding:20px;min-width:0}
+.b227-dialog .cc100-card h3{margin:0 0 18px}
+.b227-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.b227-dialog label{display:flex;flex-direction:column;gap:7px;font-weight:650;min-width:0}
+.b227-dialog input,.b227-dialog textarea{box-sizing:border-box;width:100%;max-width:100%;padding:11px 12px;border:1px solid #cadbea;border-radius:9px;background:#fff;font:inherit;color:#17344d}
+.b227-observations{margin:14px 0}.b227-dialog textarea{min-height:84px;resize:vertical}
+.b227-dialog #b227Form>button{width:100%;margin-top:12px;min-height:48px}
+.b227-live{border-radius:12px;padding:16px;margin-bottom:18px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.5}
+.b227-live strong{font-size:19px}.b227-pass{background:#e4f6e9!important;color:#14683b!important;border:1px solid #a7dbb6!important}.b227-fail{background:#ffebea!important;color:#a21e25!important;border:1px solid #f3b5b6!important}.b227-neutral{background:#f1f6fb;color:#526b82;border:1px solid #d8e6f1}
+.b227-badge{display:inline-block;padding:6px 10px;border-radius:100px;font-size:12px;font-weight:800;white-space:nowrap}
+.b227-dialog #b227History .cc100-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}
+.b227-dialog table{width:100%;border-collapse:collapse;white-space:nowrap}.b227-dialog th,.b227-dialog td{padding:10px;border-bottom:1px solid #e1eaf3;text-align:left}.b227-dialog th{background:#f2f6fa;font-size:12px}
+@media(max-width:760px){.b227-columns,.b227-dialog #b227History .cc100-charts{grid-template-columns:1fr}.b227-dialog .cc100-kpis{grid-template-columns:1fr}.b227-form-grid{grid-template-columns:1fr}.b227-dialog .cc100-card{padding:15px}}
+
+/* V29.0.171: ventana de balanza con las mismas proporciones que las cartas ambientales.
+   Se limita únicamente al registro, sin afectar las ventanas administrativas. */
+#balance227Modal.b227-overlay{align-items:center;overflow:hidden;padding:24px 16px}
+#balance227Modal>.b227-dialog{width:min(100%,975px);max-width:975px;max-height:calc(100dvh - 48px);overflow-y:auto;overscroll-behavior:contain;padding:22px 22px 26px;border-radius:20px}
+#balance227Modal .b227-heading h2{font-size:clamp(21px,2.1vw,27px)}
+#balance227Modal .b227-dialog .cc100-kpis>div{padding:15px}
+#balance227Modal .b227-dialog .cc100-kpis strong{font-size:clamp(16px,1.6vw,20px)}
+#balance227Modal .b227-dialog .cc100-card{padding:17px}
+#balance227Modal .b227-columns{gap:14px;margin-bottom:16px}
+#balance227Modal .b227-dialog #b227History{overflow-x:auto}
+@media(max-width:760px){#balance227Modal.b227-overlay{padding:10px;align-items:flex-start}#balance227Modal>.b227-dialog{max-height:calc(100dvh - 20px);padding:16px}#balance227Modal .b227-dialog .cc100-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}#balance227Modal .b227-dialog .cc100-kpis>div{padding:10px}#balance227Modal .b227-dialog .cc100-kpis strong{font-size:14px}}
+@media(max-width:480px){#balance227Modal .b227-dialog .cc100-kpis{grid-template-columns:1fr}}
+
+/* V178: acciones térmicas visibles y estables en todos los anchos */
+#ccMasterGrid>.control-card .env-actions{flex:0 1 auto;min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;overflow:visible;gap:8px}
+#ccMasterGrid #ntkSettings,#ccMasterGrid #hachSettings{display:inline-flex!important;visibility:visible!important;opacity:1!important;position:static!important;align-items:center;justify-content:center;white-space:normal}
+@media(max-width:1050px){#ccMasterGrid>.control-card .env-actions{width:100%;justify-content:flex-start}}
+.psi-control-save-toast{position:fixed;bottom:24px;right:24px;z-index:999999;max-width:min(440px,calc(100vw - 32px));padding:16px 20px;border:1px solid #b5e3cd;border-radius:12px;background:#e8f8ef;color:#125f3e;font-weight:700;box-shadow:0 12px 35px #1234}
