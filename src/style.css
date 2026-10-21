@@ -901,3 +901,29 @@ html,body,#app,button,input,select,textarea{font-family:var(--psi-font)!importan
 .comm78-dialog{max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
 .comm78-header,.comm78-toolbar,.comm266-tabs,.comm78-compose{flex-shrink:0}
 @media(max-width:650px){.comm266-tabs{padding:8px}.comm266-tabs button{flex:1;font-size:13px}.comm78-dialog{max-height:96dvh}}
+
+/* V29.0.267 — Chat-first: accessible, compact conversation view. */
+.comm78-dialog{width:min(860px,96vw)!important;max-height:min(92dvh,940px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;border-radius:22px!important}
+.comm78-header{padding:19px 25px 14px!important;flex-shrink:0}
+.comm78-header h2{font-size:clamp(19px,2vw,25px)!important;line-height:1.22!important;margin:7px 0!important}
+.comm78-toolbar{padding:10px 24px!important;flex-shrink:0}
+.comm267-attention{padding:7px 24px!important;flex-shrink:0;gap:12px!important}
+.comm267-attention button{font-size:13px!important;padding:9px 14px!important}
+.comm267-attention small{font-size:12px!important}
+.comm267-tabs{padding:9px 24px!important;gap:9px!important;flex-shrink:0}
+.comm267-tabs button{padding:9px 15px!important;font-size:14px!important}
+.comm78-thread{flex:1 1 auto!important;min-height:140px!important;max-height:none!important;overflow-y:auto!important;overscroll-behavior:contain;padding:18px 25px!important;background:#f0f7f5!important}
+.comm78-compose{flex-shrink:0!important;padding:12px 24px 17px!important;background:white!important}
+.comm78-compose textarea{min-height:65px!important;max-height:110px!important;resize:vertical}
+.comm266-tech:not([hidden]){overflow-y:auto!important;flex:1 1 auto!important;min-height:0!important}
+.comm266-tech[hidden],.comm78-thread[hidden],.comm78-compose[hidden]{display:none!important}
+.psi-live-card{border-left:5px solid #1682b2!important;box-shadow:0 16px 38px #0c294638!important}
+@media(max-width:650px){.comm78-dialog{width:100vw!important;max-height:100dvh!important;border-radius:0!important}.comm78-header,.comm78-toolbar,.comm267-tabs,.comm78-compose{padding-left:15px!important;padding-right:15px!important}.comm267-attention small{display:none}}
+
+/* V29.0.269 — controles visibles y accesibles en Safari y Chrome */
+.home-command h2,.home-command>div h2{color:#fff!important;-webkit-text-fill-color:#fff!important;text-shadow:0 1px 3px #001c3566!important;opacity:1!important}
+.sidebar .sidebar-toggle-fixed{display:flex!important;position:relative!important;align-items:center;justify-content:center;flex:0 0 38px;width:38px!important;height:36px!important;margin:5px 12px 9px!important;border:1px solid #8fb5d5!important;background:#204c6e!important;color:#fff!important;border-radius:9px!important;cursor:pointer!important;z-index:4!important}
+.sidebar .sidebar-toggle-fixed:hover{background:#32698f!important}.sidebar-toggle-expand{display:none}.sidebar.compact .sidebar-toggle-collapse{display:none}.sidebar.compact .sidebar-toggle-expand{display:flex}.sidebar.compact .sidebar-toggle-fixed{margin:5px auto 10px!important}.sidebar.compact .side-caption{display:none!important}
+.sidebar-toggle-fixed:focus-visible,.alert-permission-btn:focus-visible{outline:3px solid #69d4ff!important;outline-offset:2px!important}
+.alert-permission-btn{width:auto!important;min-width:140px!important;height:36px!important;padding:6px 10px!important;display:inline-flex!important;align-items:center;gap:7px;border:1px solid #bfd7e7!important;border-radius:9px!important;background:#fff!important;color:#14567d!important;font-size:11px!important;font-weight:750!important;white-space:nowrap}.alert-permission-btn[data-permission=granted]{color:#126d4e!important;background:#eaf9f1!important}.alert-permission-btn[data-permission=denied]{color:#9c4e12!important;background:#fff4e7!important}.alert-button-label{display:inline!important}
+@media(max-width:760px){.alert-permission-btn{min-width:36px!important;width:36px!important}.alert-button-label{display:none!important}}
