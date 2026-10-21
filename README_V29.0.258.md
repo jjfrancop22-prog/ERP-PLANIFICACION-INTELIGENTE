@@ -1,0 +1,1 @@
+V29.0.258 · Kardex: saldo histórico separado de ingresos con factura; corrección de fecha/factura/clasificación protegida mediante reautenticación de la cuenta Firebase del usuario y registro correctionHistory. Actualizar reglas de setedBottles para permitir correctionHistory. No se modifica inventario principal. Validar en localhost antes de producción.

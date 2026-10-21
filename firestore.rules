@@ -915,6 +915,24 @@ service cloud.firestore {
       && !exists(/databases/$(database)/documents/dailyControlRecords/$(request.resource.data.date+'_'+request.resource.data.cardId));
     allow update, delete: if false;
   }
+  // SETED V2: analistas activos consultan existencias y registran pesajes; gestión exclusiva JEFE.
+  match /setedBottles/{id} {
+   allow read: if active();
+   allow create: if boss() && request.resource.data.createdBy==request.auth.uid && request.resource.data.revision==1 && request.resource.data.quantity is number && request.resource.data.quantity>=0;
+   allow update: if active() && (boss() || (profile().data.role == 'ANALISTA' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy']) && request.resource.data.lastGross is number && request.resource.data.lastGross <= resource.data.lastGross && request.resource.data.quantity <= resource.data.quantity && resource.data.density is number && resource.data.density > 0 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) < 0.0001 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) > -0.0001)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy','lot','tare','density','initialGross','officialOpening','openingDate','invoice','entryResponsible','entryResponsibleId','entryType','correctionHistory']) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.updatedBy==request.auth.uid && request.resource.data.quantity>=0;
+   allow delete: if false;
+  }
+  match /setedCorrections/{id} {
+   allow read: if boss();
+   allow create: if boss() && request.resource.data.correctedBy==request.auth.uid && request.resource.data.movementId==id && request.resource.data.history.size()==1;
+   allow update: if boss() && request.resource.data.correctedBy==request.auth.uid && request.resource.data.movementId==resource.data.movementId && request.resource.data.originalDate==resource.data.originalDate && request.resource.data.history.size()==resource.data.history.size()+1;
+   allow delete: if false;
+  }
+  match /setedMovements/{id} {
+   allow read: if active();
+   allow create: if active() && (boss() || profile().data.role == 'ANALISTA') && request.resource.data.createdBy==request.auth.uid && request.resource.data.type=='CONSUMO_PESAJE';
+   allow update,delete: if false;
+  }
   match /{document=**} {allow read,write:if false;}
  }
 }

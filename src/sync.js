@@ -478,12 +478,18 @@ export async function sendCommunicationMessage(planId,body,displayName){
  await setDoc(ref,{planId,body:message,authorId:uid,authorName:String(displayName||'Usuario').slice(0,100),createdAt:serverTimestamp()});
  await waitForPendingWrites(db);return ref.id;
 }
+// V29.0.245: las reglas requieren revision incremental (1 al crear).
 export async function updateCommunicationStatus(planId,status){
  const uid=auth.currentUser?.uid;if(!uid)throw Error('Inicie sesión.');
  if(!['ATENCION','SEGUIMIENTO','ATENDIDO'].includes(status))throw Error('Estado inválido.');
  const ref=doc(db,'activityCommunications',planId);
- await runTransaction(db,async tx=>{const previous=await tx.get(ref);tx.set(ref,{status,updatedBy:uid,updatedAt:serverTimestamp(),revision:(previous.exists()?Number(previous.data().revision||0):0)+1},{merge:true})});
- await waitForPendingWrites(db);
+ await runTransaction(db,async tx=>{
+  const snap=await tx.get(ref);
+  const previous=snap.exists()?snap.data():null;
+  const revision=previous?Number(previous.revision):0;
+  if(previous&&(!Number.isInteger(revision)||revision<1))throw Error('Revisión del seguimiento inválida.');
+  tx.set(ref,{status,updatedBy:uid,updatedAt:serverTimestamp(),revision:revision+1},{merge:true});
+ });
 }
 
 // V29.0.79: una marca de lectura por usuario y expediente; sin duplicar mensajes.

@@ -1,0 +1,1 @@
+V29.0.262: consolidación exclusiva SETED de Ácido clorhídrico concentrado y Ácido clorhídrico libre de metales en un único Kardex y fila de existencias (mL). Mantiene por separado cada frasco, lote, ingreso y pesaje; no modifica datos ni inventario maestro. No requiere nuevas reglas Firebase.
