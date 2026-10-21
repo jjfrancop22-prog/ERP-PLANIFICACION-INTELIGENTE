@@ -887,3 +887,17 @@ html,body,#app,button,input,select,textarea{font-family:var(--psi-font)!importan
 .comm265-pulse{width:9px;height:9px;border-radius:50%;background:#19a478;box-shadow:0 0 0 4px #d2f1e6;flex:none}
 .comm80-window .comm-card:focus-within{outline:2px solid #1687ae;outline-offset:2px}.comm80-window button:focus-visible,.comm80-window select:focus-visible{outline:3px solid #58afcf;outline-offset:2px}
 @media(max-width:720px){.comm265-event-toggle{align-items:flex-start;flex-direction:column}.comm265-hint button{margin-left:0}}
+
+/* V29.0.266: chat-first, technical controls remain separate */
+.comm266-tabs{display:flex;gap:10px;padding:10px 22px;background:#f3f8fc;border-bottom:1px solid #d9e6ee;flex-wrap:wrap}
+.comm266-tabs button{border:1px solid #cbdfea;border-radius:10px;padding:10px 16px;background:#fff;color:#214a65;font-weight:700;cursor:pointer}
+.comm266-tabs button.active{background:#12658d;color:#fff;border-color:#12658d}
+.comm266-tech{overflow:auto;max-height:54vh;padding:12px 18px}
+.comm266-tech .technical90{margin:0}
+.comm266-tech[hidden],.comm78-thread[hidden],.comm78-compose[hidden]{display:none!important}
+.comm78-thread{min-height:220px;max-height:52vh;overflow-y:auto;scroll-behavior:smooth}
+.comm78-compose{background:#fff;border-top:1px solid #d8e5ed;padding:15px 20px}
+.comm78-compose textarea{min-height:72px}
+.comm78-dialog{max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
+.comm78-header,.comm78-toolbar,.comm266-tabs,.comm78-compose{flex-shrink:0}
+@media(max-width:650px){.comm266-tabs{padding:8px}.comm266-tabs button{flex:1;font-size:13px}.comm78-dialog{max-height:96dvh}}
