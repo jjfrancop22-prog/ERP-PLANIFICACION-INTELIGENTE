@@ -1,0 +1,1 @@
+V29.0.331: EI-360 con motor gráfico y Westgard exploratorio acumulativo (histórico físico + digital), límites configurados y mes seleccionado. No altera registros ni reglas Firebase. Verificar con datos reales y permisos de consulta.\n

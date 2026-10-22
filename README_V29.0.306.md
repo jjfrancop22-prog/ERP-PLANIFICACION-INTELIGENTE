@@ -1,0 +1,1 @@
+V29.0.306: reglas de corrección histórica con secuencia de revisión, auditoría atómica y validación de responsable por UID. Publicar firestore.rules en Firebase antes de probar. El resto del ERP permanece sin cambios.

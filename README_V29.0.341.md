@@ -1,0 +1,1 @@
+V29.0.341 — Filtro por analista en Centro de Comunicaciones. Combina filtro de estado, búsqueda y selección de analista sin consultas adicionales a Firebase. La confirmación de lectura y notificaciones avanzadas requieren pruebas adicionales; no se declaran implementadas en esta entrega.

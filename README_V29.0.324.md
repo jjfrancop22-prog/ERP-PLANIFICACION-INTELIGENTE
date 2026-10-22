@@ -1,0 +1,1 @@
+V29.0.324: unificación EI-154: una sola gráfica y tabla mensual de registros digitales e históricos físicos, límites 360–380 °C configurables, correcciones guardadas y alertas universales. Sin cambios en Firebase ni en registros. Las demás familias requieren auditoría.\n

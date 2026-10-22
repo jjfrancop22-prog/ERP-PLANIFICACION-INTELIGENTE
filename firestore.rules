@@ -137,7 +137,7 @@ service cloud.firestore {
   match /manualControlHistory/{recordId} {
     allow read: if active();
     allow create: if boss()
-      && request.resource.data.keys().hasOnly(['date','controlId','kind','origin','status','readings','nominals','tolerance','conforms','responsibleUid','responsibleName','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.keys().hasOnly(['date','controlId','kind','origin','status','readings','nominals','tolerance','conforms','responsibleUid','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt'])
       && recordId==request.resource.data.date+'_'+request.resource.data.controlId
       && request.resource.data.date is string && request.resource.data.date.size()==10
       && exists(/databases/$(database)/documents/controlCards/$(request.resource.data.controlId))
@@ -159,6 +159,56 @@ service cloud.firestore {
       && request.resource.data.source is string && request.resource.data.source.size()>=3 && request.resource.data.source.size()<=200
       && request.resource.data.observations is string && request.resource.data.observations.size()<=1000
       && request.resource.data.digitizedBy==request.auth.uid && request.resource.data.digitizedAt==request.time;
+    allow update, delete: if false;
+  }
+  // V29.0.304: correcciones auditadas de históricos manuales, sin sobrescribir el original.
+  // V29.0.306: corrección histórica atómica, original inmutable y auditoría obligatoria.
+  match /manualControlCorrectionsCurrent/{recordId} {
+    allow read: if active();
+    function validCorrection() {
+      let d=request.resource.data;
+      let original=get(/databases/$(database)/documents/manualControlHistory/$(recordId)).data;
+      let audit=getAfter(/databases/$(database)/documents/manualControlCorrections/$(recordId+'_r'+string(d.revision))).data;
+      return boss()
+        && exists(/databases/$(database)/documents/manualControlHistory/$(recordId))
+        && d.keys().hasOnly(['date','controlId','kind','origin','readings','nominals','tolerance','conforms','status','responsibleUid','responsibleName','source','observations','recordId','revision','reason','correctedBy','correctedAt'])
+        && d.recordId==recordId && d.controlId==original.controlId && d.date==original.date
+        && d.kind=='MULTIPUNTO' && d.origin=='HISTORICO_MANUAL' && d.nominals==[4,7,10]
+        && d.revision is int && d.revision>=1
+        && d.correctedBy==request.auth.uid && d.correctedAt==request.time
+        && d.reason is string && d.reason.size()>=10 && d.reason.size()<=500
+        && d.readings is list && d.readings.size()==3
+        && d.readings[0] is number && d.readings[1] is number && d.readings[2] is number
+        && d.readings[0]>=0 && d.readings[0]<=14 && d.readings[1]>=0 && d.readings[1]<=14 && d.readings[2]>=0 && d.readings[2]<=14
+        && d.tolerance==original.tolerance
+        && d.conforms==((d.readings[0]-4<=d.tolerance && 4-d.readings[0]<=d.tolerance) && (d.readings[1]-7<=d.tolerance && 7-d.readings[1]<=d.tolerance) && (d.readings[2]-10<=d.tolerance && 10-d.readings[2]<=d.tolerance))
+        && d.status==(d.conforms?'COMPLETADA':'NO_CONFORME')
+        && d.responsibleUid is string && exists(/databases/$(database)/documents/users/$(d.responsibleUid))
+        && d.responsibleName is string && d.responsibleName.size()>0 && d.responsibleName.size()<=200
+        && d.source is string && d.source.size()>=3 && d.source.size()<=200
+        && d.observations is string && d.observations.size()<=1000
+        && audit.recordId==recordId && audit.revision==d.revision
+        && audit.correctedBy==d.correctedBy && audit.correctedAt==d.correctedAt
+        && audit.reason==d.reason && audit.after.readings==d.readings
+        && audit.after.responsibleUid==d.responsibleUid;
+    }
+    allow create: if validCorrection() && request.resource.data.revision==1;
+    allow update: if validCorrection() && request.resource.data.revision==resource.data.revision+1;
+    allow delete: if false;
+  }
+  match /manualControlCorrections/{auditId} {
+    allow read: if active();
+    allow create: if boss()
+      && request.resource.data.recordId is string
+      && request.resource.data.revision is int && request.resource.data.revision>=1
+      && auditId==request.resource.data.recordId+'_r'+string(request.resource.data.revision)
+      && request.resource.data.keys().hasOnly(['recordId','revision','before','after','reason','correctedBy','correctedAt'])
+      && request.resource.data.correctedBy==request.auth.uid
+      && request.resource.data.correctedAt==request.time
+      && request.resource.data.reason is string && request.resource.data.reason.size()>=10
+      && request.resource.data.before is map && request.resource.data.after is map
+      && getAfter(/databases/$(database)/documents/manualControlCorrectionsCurrent/$(request.resource.data.recordId)).data.revision==request.resource.data.revision
+      && getAfter(/databases/$(database)/documents/manualControlCorrectionsCurrent/$(request.resource.data.recordId)).data.correctedBy==request.auth.uid;
     allow update, delete: if false;
   }
   // V29.0.199: bloqueo documental cruzado por fecha e identidad estable.
@@ -925,8 +975,8 @@ service cloud.firestore {
     // Archivo inmutable; validación del documento y su identidad canónica.
     // La conformidad técnica histórica requiere cotejo documental por el JEFE.
     allow create: if boss()
-      && request.resource.data.keys().hasOnly(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','source','observations','digitizedBy','digitizedAt'])
-      && request.resource.data.keys().hasAll(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.keys().hasOnly(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.keys().hasAll(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt'])
       && request.resource.data.origin=='HISTORICO_MANUAL'
       && request.resource.data.date is string && request.resource.data.date.size()==10
       && request.resource.data.cardId is string && request.resource.data.cardId.size()>0 && request.resource.data.cardId.size()<=100
@@ -939,15 +989,54 @@ service cloud.firestore {
       && request.resource.data.correction is number && request.resource.data.correction>=-30 && request.resource.data.correction<=30
       && request.resource.data.corrections is list && request.resource.data.corrections.size()==request.resource.data.readings.size()
       && request.resource.data.correctionBasis in ['PATRON','EQUIPO','NINGUNA']
-      && request.resource.data.certificate is string && request.resource.data.certificate.size()>=5 && request.resource.data.certificate.size()<=200
-      && request.resource.data.criterion is string && request.resource.data.criterion.size()>=5 && request.resource.data.criterion.size()<=200
+      && request.resource.data.certificate is string && request.resource.data.certificate.size()>=4 && request.resource.data.certificate.size()<=200
+      && request.resource.data.criterion is string && request.resource.data.criterion.size()>=4 && request.resource.data.criterion.size()<=200
       && request.resource.data.conforms is bool
       && request.resource.data.status==(request.resource.data.conforms?'COMPLETADA':'NO_CONFORME')
       && request.resource.data.responsibleName is string && request.resource.data.responsibleName.size()>0 && request.resource.data.responsibleName.size()<=160
+      && ( !('responsibleUid' in request.resource.data) || (
+           request.resource.data.responsibleUid is string
+           && exists(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid))
+           && get(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid)).data.role == 'ANALISTA'
+           && get(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid)).data.status == 'ACTIVO'
+           && get(/databases/$(database)/documents/users/$(request.resource.data.responsibleUid)).data.name == request.resource.data.responsibleName))
       && request.resource.data.source is string && request.resource.data.source.size()>=3 && request.resource.data.source.size()<=200
       && request.resource.data.observations is string && request.resource.data.observations.size()<=1500
       && request.resource.data.digitizedBy==request.auth.uid && request.resource.data.digitizedAt==request.time
       && !exists(/databases/$(database)/documents/dailyControlRecords/$(request.resource.data.date+'_'+request.resource.data.cardId));
+    allow update, delete: if false;
+  }
+  // V29.0.309: correcciones auditadas de históricos generales.
+  // El documento original nunca se modifica.
+  match /historicalControlArchiveCorrections/{recordId} {
+    allow read: if active();
+    allow create, update: if boss()
+      && exists(/databases/$(database)/documents/historicalControlArchive/$(recordId))
+      && request.resource.data.recordId == recordId
+      && request.resource.data.cardId == get(/databases/$(database)/documents/historicalControlArchive/$(recordId)).data.cardId
+      && request.resource.data.date == get(/databases/$(database)/documents/historicalControlArchive/$(recordId)).data.date
+      && request.resource.data.revision is int
+      && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
+      && request.resource.data.reason is string && request.resource.data.reason.size() >= 10
+      && request.resource.data.correctedBy == request.auth.uid
+      && request.resource.data.correctedAt == request.time
+      && request.resource.data.readings is list && request.resource.data.readings.size() >= 1
+      && request.resource.data.readings.size() <= 3
+      && request.resource.data.conforms is bool
+      && request.resource.data.status == (request.resource.data.conforms ? 'COMPLETADA' : 'NO_CONFORME')
+      && getAfter(/databases/$(database)/documents/historicalControlArchiveAudits/$(recordId+'_r'+string(request.resource.data.revision))).data.revision == request.resource.data.revision;
+    allow delete: if false;
+  }
+  match /historicalControlArchiveAudits/{auditId} {
+    allow read: if boss();
+    allow create: if boss()
+      && request.resource.data.recordId is string
+      && auditId == request.resource.data.recordId+'_r'+string(request.resource.data.revision)
+      && request.resource.data.before is map && request.resource.data.after is map
+      && request.resource.data.reason is string && request.resource.data.reason.size() >= 10
+      && request.resource.data.correctedBy == request.auth.uid
+      && request.resource.data.correctedAt == request.time
+      && getAfter(/databases/$(database)/documents/historicalControlArchiveCorrections/$(request.resource.data.recordId)).data.revision == request.resource.data.revision;
     allow update, delete: if false;
   }
   // SETED V2: analistas activos consultan existencias y registran pesajes; gestión exclusiva JEFE.

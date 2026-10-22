@@ -556,10 +556,32 @@ export async function saveManualControlHistory(card,date,values,responsible,sour
  const daily=await tx.get(doc(db,'dailyControlRecords',date+'_'+card.id));if(daily.exists())throw Error('Esta fecha ya tiene un registro diario confirmado.');
  tx.set(ref,{date,controlId:card.id,kind:'MULTIPUNTO',origin:'HISTORICO_MANUAL',status:conforms?'COMPLETADA':'NO_CONFORME',readings:values,nominals:[4,7,10],tolerance,conforms,responsibleUid:responsible.uid,responsibleName:responsible.name,source:source.trim(),observations:String(notes||'').slice(0,1000),digitizedBy:uid,digitizedAt:serverTimestamp()});});
 }
+export async function correctManualControlHistory(card,date,values,responsible,source,notes,reason){
+ const uid=auth.currentUser?.uid;if(!uid)throw Error('Sesión no autenticada.');
+ if(String(reason||'').trim().length<10)throw Error('Justifique la corrección (mínimo 10 caracteres).');
+ if(values.length!==3||values.some(v=>!Number.isFinite(v)||v<0||v>14))throw Error('Tres lecturas válidas requeridas.');
+ if(!responsible?.uid||!responsible?.name||String(source||'').trim().length<3)throw Error('Responsable y documento de origen requeridos.');
+ const recordId=date+'_'+card.id,baseRef=doc(db,'manualControlHistory',recordId),pointerRef=doc(db,'manualControlCorrectionsCurrent',recordId);
+ await runTransaction(db,async tx=>{
+  const [base,pointer]=await Promise.all([tx.get(baseRef),tx.get(pointerRef)]);
+  if(!base.exists())throw Error('Solo se pueden corregir históricos manuales existentes.');
+  const previous=pointer.exists()?pointer.data():base.data(),revision=pointer.exists()?Number(pointer.data().revision||0)+1:1;
+  const auditRef=doc(db,'manualControlCorrections',recordId+'_r'+revision);
+  const tolerance=Number(base.data().tolerance),conforms=values.every((v,i)=>Math.abs(v-[4,7,10][i])<=tolerance+1e-9);
+  const after={date,controlId:card.id,kind:'MULTIPUNTO',origin:'HISTORICO_MANUAL',readings:values,nominals:[4,7,10],tolerance,conforms,status:conforms?'COMPLETADA':'NO_CONFORME',responsibleUid:responsible.uid,responsibleName:responsible.name,source:source.trim(),observations:String(notes||'').slice(0,1000)};
+  const before={readings:previous.readings,responsibleUid:previous.responsibleUid,responsibleName:previous.responsibleName,source:previous.source,observations:previous.observations,status:previous.status};
+  tx.set(auditRef,{recordId,revision,before,after,reason:reason.trim(),correctedBy:uid,correctedAt:serverTimestamp()});
+  tx.set(pointerRef,{...after,recordId,revision,reason:reason.trim(),correctedBy:uid,correctedAt:serverTimestamp()});
+ });
+}
 export async function readManualControlHistory(cardId,month){
  const start=month+'-01',end=new Date(Date.UTC(+month.slice(0,4),+month.slice(5),1)).toISOString().slice(0,10);
- const snap=await getDocs(query(collection(db,'manualControlHistory'),where('date','>=',start),where('date','<',end),limit(250)));
- return snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.controlId===cardId);
+ const [base,corrections]=await Promise.all([
+  getDocs(query(collection(db,'manualControlHistory'),where('date','>=',start),where('date','<',end),limit(250))),
+  getDocs(query(collection(db,'manualControlCorrectionsCurrent'),where('date','>=',start),where('date','<',end),limit(250)))
+ ]);
+ const map=new Map(corrections.docs.map(d=>[d.id,d.data()]));
+ return base.docs.map(d=>({id:d.id,...d.data(),...(map.has(d.id)?{...map.get(d.id),originalDigitizedAt:d.data().digitizedAt,originalDigitizedBy:d.data().digitizedBy}: {})})).filter(r=>r.controlId===cardId);
 }
 
 // PEC0404-05: control multipunto específico del conductímetro EI-104.
@@ -579,4 +601,11 @@ export async function completeConductivityControl(card,date,readings,uid,observa
  tx.set(ref,{date,controlId:card.id,kind:'CONDUCTIVIDAD',status:conforms?'COMPLETADA':'NO_CONFORME',readings:values,errors,relativeErrors,nominals:nominal,tolerance,conforms,observations:String(observations).slice(0,1500),completedBy:uid,completedAt:serverTimestamp()});
  });syncState.lastConfirmed=new Date();syncState.lastEvent='confirmed';emit();
  }finally{syncState.pending=Math.max(0,syncState.pending-1);emit();}
+}
+
+// Consulta puntual y limitada; evita 80 suscripciones permanentes a estados.
+export async function readCommunicationStatuses(planIds){
+ const ids=[...new Set((planIds||[]).filter(Boolean))].slice(0,80);
+ const rows=await Promise.all(ids.map(async id=>{try{const snap=await getDoc(doc(db,'activityCommunications',id));return [id,snap.exists()?snap.data():null]}catch(e){console.warn('Estado '+id+':',e.message);return [id,null]}}));
+ return Object.fromEntries(rows);
 }

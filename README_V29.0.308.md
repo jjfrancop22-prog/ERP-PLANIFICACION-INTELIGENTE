@@ -1,0 +1,1 @@
+V29.0.308: habilita formulario de carga histórica documental para cartas distintas de pH; conserva flujo de pH existente. Utiliza historicalControlArchive y reglas actuales. La conformidad es documental, no automática. No incluye corrección auditada de históricos genéricos; registros inmutables. Publicar reglas de Firestore vigentes. No se probó contra Firebase real.

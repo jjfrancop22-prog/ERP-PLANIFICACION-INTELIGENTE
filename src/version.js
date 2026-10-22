@@ -1,5 +1,5 @@
 // Versión visible y comprobación de despliegues. Sin escrituras a Firebase.
-export const APP_VERSION = '29.0.292';
+export const APP_VERSION = '29.0.342';
 export const VERSION_URL = '/version.json';
 let lastNotified = '';
 export async function checkForAppUpdate({manual=false}={}) {
