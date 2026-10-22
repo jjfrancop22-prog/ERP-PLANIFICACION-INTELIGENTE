@@ -452,6 +452,14 @@ function scheduleSpecializedPanelUpdate(){
   if(newPanel){
    const expanded=oldPanel.querySelector('.cc-compact-details')?.open;
    if(expanded===false)newPanel.querySelector('.cc-compact-details')?.removeAttribute('open');
+   // Conservar los manejadores ya instalados al sustituir solo el panel.
+   // Sin esto, el panel actualizado pierde los botones de las cartas especializadas.
+   const oldButtons=[...oldPanel.querySelectorAll('button')];
+   const newButtons=[...newPanel.querySelectorAll('button')];
+   newButtons.forEach((button,index)=>{
+    const previous=oldButtons[index];
+    if(previous&&previous.className===button.className&&previous.onclick)button.onclick=previous.onclick;
+   });
    oldPanel.replaceWith(newPanel);
    newPanel.querySelectorAll('.cc-journey-open').forEach(btn=>btn.onclick=()=>openControlMulti(state.controlCards.find(c=>c.id===btn.dataset.cardId),date));
    newPanel.querySelectorAll('.cc-go-controls').forEach(btn=>btn.onclick=()=>navigate94('Cartas de Control'));
@@ -626,7 +634,7 @@ function bindControlPage(){
  document.querySelectorAll('.cc-open-multi').forEach(btn=>btn.onclick=()=>openControlMulti(state.controlCards.find(c=>c.id===btn.dataset.cardId),date));
  document.querySelectorAll('.daily-control-form').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const card=state.controlCards.find(c=>c.id===f.dataset.controlId),btn=f.querySelector('button');btn.disabled=true;try{await completeDailyControl(card,date,f.querySelector('[name=value]').value,state.user.uid);alert('Control diario confirmado. Visible para todos los analistas.')}catch(err){alert(err.message)}finally{btn.disabled=false}});
 }
-function showControlToast(message){document.querySelector('#ccSavedToast')?.remove();const toast=document.createElement('div');toast.id='ccSavedToast';toast.className='cc-saved-toast';toast.setAttribute('role','status');toast.textContent=message;document.body.append(toast);setTimeout(()=>toast.remove(),3500)}
+function showControlToast(message){refreshOwnCardAfterReturn();document.querySelector('#ccSavedToast')?.remove();const toast=document.createElement('div');toast.id='ccSavedToast';toast.className='cc-saved-toast';toast.setAttribute('role','status');toast.textContent=message;document.body.append(toast);setTimeout(()=>toast.remove(),3500)}
 function openControlMulti(card,date){
   if(!card)return;
   if(card.kind==='CONDUCTIVIDAD')return openConductivityControl(card,date);
@@ -660,6 +668,23 @@ function openConductivityControl(card,date){
  form.onsubmit=async e=>{e.preventDefault();const b=root.querySelector('#conductSave');b.disabled=true;b.textContent='Confirmando con Firebase…';try{await completeConductivityControl(card,date,nominal.map((_,i)=>form.elements['v'+i].value),state.user.uid,form.elements.observations.value);root.innerHTML='';showControlToast('✓ Control de conductividad guardado y confirmado en Firebase. Registro diario compartido.');}catch(err){const msg=root.querySelector('#conductError');msg.hidden=false;msg.textContent='⚠ No se confirmó el registro: '+err.message;b.disabled=false;b.textContent='Reintentar guardado en Firebase';}};
 }
 
+// Refresco puntual después de volver del formulario: nunca hace polling ni escribe en Firebase.
+// Se programa tras cerrar una carta en la misma computadora, evitando esperar F5.
+let localCardRefreshTimer=null;
+function refreshOwnCardAfterReturn(){
+ if(state.page!=='Mi Jornada'||!state.user)return;
+ clearTimeout(localCardRefreshTimer);
+ localCardRefreshTimer=setTimeout(()=>{
+  if(state.page!=='Mi Jornada'||!state.user)return;
+  const date=state.journeyDate||new Date().toLocaleDateString('en-CA');
+  // Las cartas especializadas se leen del servidor una sola vez por regreso.
+  // Los controles genéricos ya tienen su escucha compartida.
+  refreshEnvironmentalJourney(date);
+  scheduleSpecializedPanelUpdate();
+ },350);
+}
+window.addEventListener('focus',refreshOwnCardAfterReturn);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOwnCardAfterReturn()});
 let dailyStop=null;function startDailyControlWatch(){dailyStop?.();const date=(state.page==='Mi Jornada'?state.journeyDate:state.controlDate)||new Date().toLocaleDateString('en-CA');dailyStop=watchDailyControls(date,s=>{state.dailyControls=s.docs.map(d=>({id:d.id,...d.data()}));if(['Cartas de Control','Mi Jornada'].includes(state.page))main()},e=>console.error('Controles diarios:',e));}
 const journeyOpening=new Set();
 function bindJourney(){
