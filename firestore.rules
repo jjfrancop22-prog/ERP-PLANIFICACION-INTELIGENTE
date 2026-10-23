@@ -379,6 +379,16 @@ service cloud.firestore {
       && request.resource.data.createdAt==request.time
       && request.resource.data.productType in ['REACTIVO','ESTANDAR','MRC','INSUMO'];
   }
+  match /referenceReclassifications/{id} {
+    allow read: if boss();
+    allow create: if boss() && request.resource.data.keys().hasOnly(['oldCode','newCode','reagentIds','reason','uid','createdAt','kind'])
+      && request.resource.data.uid==request.auth.uid && request.resource.data.createdAt==request.time
+      && request.resource.data.kind=='REA_A_MRC'
+      && request.resource.data.oldCode is string && request.resource.data.newCode is string
+      && request.resource.data.reason is string && request.resource.data.reason.size()>=8
+      && request.resource.data.reagentIds is list && request.resource.data.reagentIds.size()>0;
+    allow update, delete: if false;
+  }
   match /productCounters/{type} {
     allow get: if boss();
     allow list, delete: if false;

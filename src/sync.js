@@ -193,6 +193,40 @@ export async function editReagentHeader({id,name,code,lot,brand,presentation,pro
  }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
 }
 
+// Reclasificación de un código maestro: frascos y auditoría en una transacción.
+export async function reclassifyReferenceMaster(oldCode,expectedIds,reason,uid){
+ if(!navigator.onLine)throw Error('Se requiere conexión a Firebase.');
+ if(!/^REA-\d+$/i.test(oldCode)||reason.trim().length<8)throw Error('Código o motivo inválido.');
+ if(!expectedIds.length||expectedIds.length>100)throw Error('Grupo de frascos inválido.');
+ const current=await getDocs(query(collection(db,'reagents'),orderBy('name')));
+ const group=current.docs.filter(d=>d.data().code===oldCode);
+ if(group.length!==expectedIds.length||group.some(d=>!expectedIds.includes(d.id)||!['MRC','ESTANDAR'].includes(d.data().productType)))throw Error('El grupo cambió. Actualice la lista antes de continuar.');
+ const used=new Set(current.docs.map(d=>d.data().code));
+ const maxExisting=Math.max(0,...[...used].filter(c=>/^MRC-\d+$/i.test(c)).map(c=>Number(c.slice(4))));
+ const counter=doc(db,'productCounters','MRC');
+ const auditId=crypto.randomUUID();
+ syncState.pending++;emit();
+ try{
+  const result=await runTransaction(db,async tx=>{
+   const snaps=[];for(const d of group)snaps.push(await tx.get(d.ref));
+   const c=await tx.get(counter);
+   if(snaps.some((snap,i)=>!snap.exists()||snap.data().code!==oldCode||!['MRC','ESTANDAR'].includes(snap.data().productType)))throw Error('Cambios concurrentes detectados.');
+   const last=c.exists()?c.data().last:0;
+   // No se modifica un contador existente con saltos: reservar consecutivos individualmente.
+   // Si existen códigos heredados por encima del contador, detener y solicitar conciliación.
+   if(last<maxExisting)throw Error(`Contador MRC (${last}) inferior a códigos existentes (${maxExisting}). Requiere conciliación administrativa antes de migrar.`);
+   const next=last+1,newCode=`MRC-${String(next).padStart(4,'0')}`;
+   if(used.has(newCode))throw Error('Código MRC ocupado. Actualice el inventario.');
+   const now=serverTimestamp();
+   for(const snap of snaps){tx.update(snap.ref,{code:newCode,version:snap.data().version+1,updatedBy:uid,updatedAt:now});}
+   tx.set(counter,{last:next});
+   tx.set(doc(db,'referenceReclassifications',auditId),{oldCode,newCode,reagentIds:group.map(d=>d.id),reason:reason.trim(),uid,createdAt:now,kind:'REA_A_MRC'});
+   return newCode;
+  });
+  syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;emit();return result;
+ }finally{syncState.pending--;emit()}
+}
+
 // Reposición administrativa: entrada positiva con asiento inmutable en la misma transacción.
 export async function replenishReagent({reagentId,quantity,notes,operationId},uid){
  if(!navigator.onLine)throw Error('Se requiere conexión para registrar una entrada.');
