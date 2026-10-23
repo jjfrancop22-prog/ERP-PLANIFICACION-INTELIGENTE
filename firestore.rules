@@ -554,8 +554,8 @@ service cloud.firestore {
    allow list: if boss() || (active() && profile().data.role=='ANALISTA' && resource.data.uid==request.auth.uid && request.query.limit!=null && request.query.limit<=100);
    allow update,delete: if false;
    allow create: if active() && profile().data.role=='ANALISTA'
-    && request.resource.data.keys().hasOnly(['id','planId','reagentId','uid','quantity','unit','measurement','notes','createdAt'])
-    && request.resource.data.keys().hasAll(['id','planId','reagentId','uid','quantity','unit','measurement','notes','createdAt'])
+    && request.resource.data.keys().hasOnly(['id','planId','reagentId','uid','quantity','unit','control','stockBefore','stockAfter','measurement','notes','createdAt'])
+    && request.resource.data.keys().hasAll(['id','planId','reagentId','uid','quantity','unit','control','stockBefore','stockAfter','measurement','notes','createdAt'])
     && request.resource.data.id==op && request.resource.data.uid==request.auth.uid
     && request.resource.data.planId is string && request.resource.data.reagentId is string
     && request.resource.data.quantity is number && request.resource.data.quantity>0
