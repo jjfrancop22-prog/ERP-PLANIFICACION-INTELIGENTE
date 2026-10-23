@@ -411,7 +411,7 @@ export async function consumeJourneyReagent({planId,reagentId,operationId,quanti
    const auditMeasurement={...measurement,planId};
    tx.update(reagentRef,{stock:after,version,lastOperationId:operationId,updatedAt:serverTimestamp(),updatedBy:uid});
    tx.set(movementRef,{id:operationId,reagentId,uid,kind:'CONSUMO',quantity:q,unit:r.unit,control:r.control,stockBefore:r.stock,stockAfter:after,version,measurement:auditMeasurement,notes:notes||'',createdAt:serverTimestamp()});
-   tx.set(entryRef,{id:operationId,planId,reagentId,uid,quantity:q,unit:r.unit,measurement:auditMeasurement,notes:notes||'',createdAt:serverTimestamp()});
+   tx.set(entryRef,{id:operationId,planId,reagentId,uid,quantity:q,unit:r.unit,control:r.control,stockBefore:r.stock,stockAfter:after,measurement:auditMeasurement,notes:notes||'',createdAt:serverTimestamp()});
    return {duplicate:false,stock:after};
   });
   syncState.serverConfirmed=true;syncState.lastConfirmed=new Date();return result;

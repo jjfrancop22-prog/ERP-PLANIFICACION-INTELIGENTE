@@ -4,7 +4,7 @@ import {generateControlReport} from './control-report-pdf.js';
 import {DQO360_ID,dqo360Config} from './dqo360.js';
 import {BATH364_ID,bath364Config} from './bath364.js';
 import {MICRO365_ID,micro365Config} from './micro365.js';
-import {INC306_ID} from './incubator306.js';
+import {INC306_ID,inc306Config} from './incubator306.js';
 import {OVEN316_ID} from './oven316.js';
 import {MUFLA328_ID} from './mufla328.js';
 import {N105_ID,n105Config} from './thermal105.js';
@@ -93,7 +93,7 @@ export function mountUnifiedAnalytics(host,cards,profile){
  if(previous.card&&available.some(c=>c.id===previous.card))sel.value=previous.card;
  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(previous.month||''))month.value=previous.month;
  const load=async()=>{const ticket=++seq,card=available.find(c=>c.id===sel.value),m=month.value;try{sessionStorage.setItem('psi-analytics-choice',JSON.stringify({card:sel.value,month:m}))}catch{};host.querySelectorAll('.cc-generic-archive').forEach(x=>x.remove());result.innerHTML='<p class="muted">Consultando registros en Firebase…</p>';history.hidden=false;history.onclick=()=>openGenericHistory(card,m,load);if(!card)return;
- if(card.id!==N105_ID&&card.id!==DQO360_ID&&card.id!==BATH364_ID&&card.id!==MICRO365_ID&&!['MULTIPUNTO','THERMAL161','THERMAL154','CONDUCTIVIDAD'].includes(card.kind)){
+ if(card.id!==N105_ID&&card.id!==DQO360_ID&&card.id!==BATH364_ID&&card.id!==MICRO365_ID&&card.id!==INC306_ID&&card.id!==BALANCE227_ID&&card.kind!=='ENV'&&card.kind!=='ENV_SPECIAL'&&!['MULTIPUNTO','THERMAL161','THERMAL154','CONDUCTIVIDAD'].includes(card.kind)){
   // Show archived readings independently of the specialized daily-record engine.
   // Never overwrite daily records or claim a validated Westgard baseline.
   loadGenericHistory(card,m).then(rows=>{
@@ -102,6 +102,43 @@ export function mountUnifiedAnalytics(host,cards,profile){
    const panel=document.createElement('div');panel.innerHTML=renderArchivedAnalytics(card,m,rows);
    const node=panel.firstElementChild;if(node)result.after(node);
   }).catch(e=>{if(ticket===seq){const note=document.createElement('p');note.className='form-error cc-generic-archive';note.textContent='No se pudo cargar el análisis histórico: '+e.message;result.after(note);}});
+ }
+ if(card.id===INC306_ID){
+  try{
+   const c=await inc306Config();
+   const [snap,archive]=await Promise.all([
+    getDocs(collection(db,'incubator306Records')),
+    loadGenericHistoryThrough(card,m)
+   ]);
+   if(ticket!==seq)return;
+   const scalar=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
+   const map=new Map();
+   for(const r of archive){
+    if(typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
+    const raw=scalar(r.readings?.[0]);if(raw===null)continue;
+    // Historical imports may store corrected=raw and correction=0 as placeholders.
+    // Never treat these placeholders as a documented zero correction.
+    const correctionInfo=historicalThermalValue(r,raw,{correction:c.patternCorrection});
+    map.set(r.date,{date:r.date,raw,...correctionInfo,origin:'Histórico físico',responsible:r.responsibleName||''});
+   }
+   for(const d of snap.docs){
+    const r=d.data();
+    if(r.cardId!==INC306_ID||typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
+    const raw=scalar(r.pattern),saved=scalar(r.patternCorrected);
+    if(raw===null)continue;
+    const recordedCorrection=scalar(r.patternCorrection);
+    const correction=saved!==null?saved-raw:recordedCorrection!==null?recordedCorrection:scalar(c.patternCorrection);
+    const value=saved!==null?saved:correction!==null?raw+correction:raw;
+    map.set(r.date,{date:r.date,raw,value,correction,estimated:saved===null&&recordedCorrection===null,origin:'Digital',responsible:r.responsibleName||''});
+   }
+   const series=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
+   const monthly=series.filter(r=>r.date.slice(0,7)===m);
+   const min=Number(c.min),max=Number(c.max);
+   const good=monthly.filter(r=>r.value>=min&&r.value<=max).length;
+   const chart=visualChart(monthly,{label:'Incubadora DBO5 EI-306 · temperatura corregida',low:min,high:max,unit:'°C',precision:3,analysisRows:series});
+   result.innerHTML=`<div class="cc100-kpis"><div><small>Mediciones del mes</small><strong>${monthly.length}</strong></div><div><small>Conformes técnicos</small><strong>${good}</strong></div><div><small>No conformes técnicos</small><strong>${monthly.length-good}</strong></div><div><small>Mediciones acumuladas (físicas + digitales)</small><strong>${series.length}</strong></div><div><small>Equipo / patrón</small><strong>EI-306 · ${esc(c.reference||'PF/09')}</strong></div></div><p class="cc107-status cc107-info">Incubadora DBO5 EI-306 · objetivo ${esc(c.center)} °C; límites configurados: ${esc(c.min)}–${esc(c.max)} °C. La serie consolidada integra históricos físicos y controles digitales hasta ${esc(m)}; la gráfica muestra solo el mes seleccionado. Ante coincidencias de fecha prevalece el registro digital sin eliminar el histórico. Las señales Westgard son exploratorias y no equivalen a límites estadísticos aprobados. ${series.some(r=>r.estimated)?'⚠ Algunas correcciones se estimaron usando la configuración actual: verificar el certificado y su vigencia antes de aprobar resultados.':''}</p><article class="cc100-card"><h3>Temperatura corregida (°C) · ${esc(m)}</h3>${chart}</article><article class="cc100-card"><h3>Histórico consolidado · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Lectura PF/09</th><th>Corrección</th><th>Temperatura corregida</th><th>Conformidad técnica</th><th>Responsable</th></tr></thead><tbody>${monthly.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.raw)}</td><td>${r.correction===null?'SIN DATO':esc(r.correction.toFixed(3))}${r.estimated?' ⚠ estimada':''}</td><td>${esc(r.value.toFixed(3))}</td><td>${r.value>=min&&r.value<=max?'CONFORME':'NO CONFORME'}</td><td>${esc(r.responsible)}</td></tr>`).join('')||'<tr><td colspan="7">Sin registros de este mes para EI-306.</td></tr>'}</tbody></table></div></article>`;
+  }catch(e){if(ticket===seq)result.textContent='No se pudo cargar el análisis EI-306: '+e.message;}
+  return;
  }
  if(card.id===DQO360_ID||card.id===BATH364_ID||card.id===MICRO365_ID){
   const isBath=card.id===BATH364_ID;
@@ -197,14 +234,69 @@ export function mountUnifiedAnalytics(host,cards,profile){
   internal.dispatchEvent(new Event('change')); // refresh after selected card/month are applied
   return;
  }
- if(card.kind!=='ENV'){result.innerHTML=`<div class="cc107-status cc107-info">${esc(card.name)}: esta familia utiliza un registro especializado. Puede consultar su historial desde «Cartas de control configuradas»; no se sustituyen sus cálculos por gráficos genéricos.</div>`;return;}
+ if(card.kind!=='ENV'&&card.kind!=='ENV_SPECIAL'){result.innerHTML=`<div class="cc107-status cc107-info">${esc(card.name)}: esta familia utiliza un registro especializado. Puede consultar su historial desde «Cartas de control configuradas»; no se sustituyen sus cálculos por gráficos genéricos.</div>`;return;}
  try{
-  const snap=await getDocs(query(collection(db,'environmentalRecords'),where('month','==',m)));
+  // V352: one shared pipeline for environmental, refrigerator and freezer cards.
+  // Read through the selected month so statistical analysis has an accumulated series.
+  const [snap,archived,configsSnap]=await Promise.all([
+   getDocs(query(collection(db,'environmentalRecords'),where('cardId','==',card.id))),
+   loadGenericHistoryThrough(card,m),
+   getDocs(query(collection(db,'environmentalConfigs'),where('cardId','==',card.id)))
+  ]);
   if(ticket!==seq)return;
-  const rows=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.cardId===card.id).sort((a,b)=>a.date.localeCompare(b.date));
-  const good=rows.filter(r=>r.status==='COMPLETADA').length,reviewCount=rows.filter(r=>r.status==='REVISION_METROLOGICA').length,badCount=rows.filter(r=>r.status==='NO_CONFORME').length,latest=rows.at(-1);
-  const tempOnly=rows.length?rows.every(r=>r.rhRead==null):!([ENV,balanceEnvironmentalCardId,dboEnvironmentalCardId,microEnvironmentalCardId].includes(card.id));const defaults=tempOnly?[0,6,null,null]:card.id===microEnvironmentalCardId?[15,25,80,0]:card.id===dboEnvironmentalCardId?[17,23,80,20]:card.id===balanceEnvironmentalCardId?[10,30,60,0]:[10,30,60,0];const low=latest?.minT??defaults[0],high=latest?.maxT??defaults[1],rh=latest?.maxRH??defaults[2],rhMin=latest?.minRH??defaults[3];
-  result.innerHTML=`<div class="cc100-kpis"><div><small>Controles del mes</small><strong>${rows.length}</strong></div><div><small>Cumplimiento técnico</small><strong>${rows.length?(100*good/rows.length).toFixed(1)+'%':'—'}</strong></div><div><small>Conformes</small><strong>${good}</strong></div><div><small>No conformes</small><strong>${badCount}</strong></div><div><small>Revisión metrológica</small><strong>${reviewCount}</strong></div><div><small>Base estadística</small><strong>${rows.length<10?'Insuficiente':'Exploratoria'}</strong></div></div><p class="cc-unified-diagnosis">${!rows.length?'Sin registros del mes.':badCount?'⚠ Existen mediciones no conformes; requieren revisión de Calidad.':reviewCount?'⚠ Hay mediciones con corrección estimada pendientes de revisión metrológica.':rows.length<10?'✓ Mediciones técnicamente conformes. Historial insuficiente para conclusiones estadísticas.':'✓ Mediciones técnicamente conformes; revisar tendencias antes de concluir estabilidad.'}</p><div class="cc100-charts"><article class="cc100-card"><h3>Temperatura corregida (°C)</h3><p>Límites del último registro: ${esc(low)}–${esc(high)} °C. Los criterios históricos se conservan por registro.</p>${graph(rows,'tempCorrected','Temperatura',Number(low),Number(high))}</article>${tempOnly?'':`<article class="cc100-card"><h3>Humedad relativa corregida (%)</h3><p>Límite máximo del último registro: ${esc(rh)} %.</p>${graph(rows,'rhCorrected','Humedad relativa',Number(rhMin),Number(rh))}</article>`}</div><h3>Historial y trazabilidad · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Responsable</th><th>T leída</th><th>Factor T</th><th>T corregida</th>${tempOnly?'':'<th>HR leída</th><th>Factor HR</th><th>HR corregida</th>'}<th>Estado</th><th>Certificado</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.responsibleName||r.completedBy)}</td><td>${esc(r.tempRead)}</td><td>${esc(r.tempFactor)}</td><td>${esc(r.tempCorrected)}</td>${tempOnly?'':`<td>${esc(r.rhRead)}</td><td>${esc(r.rhFactor)}</td><td>${esc(r.rhCorrected)}</td>`}<td>${esc(r.status==='COMPLETADA'?'CONFORME':r.status==='REVISION_METROLOGICA'?'REVISIÓN METROLÓGICA':'NO CONFORME')}</td><td>${esc(r.certificate)}</td></tr>`).join('')||'<tr><td colspan="${tempOnly?7:10}">Sin registros para este mes.</td></tr>'}</tbody></table></div><p class="muted">Para registrar mediciones o consultar configuraciones metrológicas, utilice los botones de la carta en el listado superior. La carga histórica ambiental requiere un flujo de importación con trazabilidad y no se habilita hasta implementarlo.</p>`;
+  const digital=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>typeof r.date==='string'&&r.date.slice(0,7)<=m);
+  const configs=configsSnap.docs.map(d=>d.data()).filter(c=>typeof c.validFrom==='string').sort((a,b)=>b.validFrom.localeCompare(a.validFrom));
+  const configFor=date=>configs.find(c=>c.validFrom<=date)||null;
+  const calibrated=(points,reading)=>{
+   if(reading===null||!Array.isArray(points))return {factor:null,review:true};
+   if(points.length===1&&Number.isFinite(Number(points[0].factor))){const p=points[0];return reading>=Number(p.from)&&reading<Number(p.to)?{factor:Number(p.factor),review:false}:{factor:null,review:true};}
+   const sorted=points.filter(p=>Number.isFinite(Number(p.indication))&&Number.isFinite(Number(p.error))).sort((a,b)=>Number(a.indication)-Number(b.indication));
+   if(sorted.length<2)return {factor:null,review:true};
+   if(reading<Number(sorted[0].indication)||reading>Number(sorted.at(-1).indication)){
+    const edge=reading<Number(sorted[0].indication)?sorted[0]:sorted.at(-1);
+    return {factor:-Number(edge.error),review:true};
+   }
+   for(let i=1;i<sorted.length;i++)if(reading<=Number(sorted[i].indication)){
+    const a=sorted[i-1],b=sorted[i],dx=Number(b.indication)-Number(a.indication);
+    return dx>0?{factor:-Number(a.error)-(Number(b.error)-Number(a.error))*(reading-Number(a.indication))/dx,review:false}:{factor:null,review:true};
+   }
+   return {factor:null,review:true};
+  };
+  const byDate=new Map();
+  const finite=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
+  for(const r of archived){
+   if(typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
+   const rawT=finite(r.readings?.[0]),rawRH=finite(r.readings?.[1]);
+   if(rawT===null)continue;
+   const cfg=configFor(r.date);
+   const t=cfg?calibrated(cfg.tempRanges,rawT):{factor:null,review:true};
+   const rh=rawRH===null?null:(cfg?calibrated(cfg.rhRanges,rawRH):{factor:null,review:true});
+   const valid=!!cfg&&!t.review&&(rh===null||!rh.review);
+   byDate.set(r.date,{date:r.date,tempRead:rawT,tempFactor:t.factor,tempCorrected:t.factor===null?rawT:rawT+t.factor,rhRead:rawRH,rhFactor:rh?.factor??null,rhCorrected:rh===null?null:rh.factor===null?rawRH:rawRH+rh.factor,estimated:!valid,origin:'Histórico físico',responsibleName:r.responsibleName||'',certificate:cfg?.certificate||r.certificate||'',source:r.source||'',minT:cfg?.minT??null,maxT:cfg?.maxT??null,minRH:cfg?.minRH??(cfg?.temperatureOnly?null:0),maxRH:cfg?.maxRH??null});
+  }
+  for(const r of digital){
+   if(!r.date)continue;
+   byDate.set(r.date,{...r,origin:'Digital',estimated:r.status==='REVISION_METROLOGICA',source:r.certificate||''});
+  }
+  const accumulated=[...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=accumulated.filter(r=>r.date.slice(0,7)===m);
+  const tempOnly=accumulated.every(r=>r.rhRead==null);
+  // A historical record without date-valid limits or documented correction is not
+  // silently certified using the latest configuration.
+  const evaluate=r=>{
+   if(r.estimated)return 'REVISION_METROLOGICA';
+   const t=finite(r.tempCorrected),lo=finite(r.minT),hi=finite(r.maxT);
+   if(t===null||lo===null||hi===null)return 'REVISION_METROLOGICA';
+   if(t<lo||t>hi)return 'NO_CONFORME';
+   if(r.rhRead!=null){const h=finite(r.rhCorrected),l=finite(r.minRH),u=finite(r.maxRH);if(h===null||l===null||u===null)return 'REVISION_METROLOGICA';if(h<l||h>u)return 'NO_CONFORME';}
+   return 'CONFORME';
+  };
+  const good=rows.filter(r=>evaluate(r)==='CONFORME').length,bad=rows.filter(r=>evaluate(r)==='NO_CONFORME').length,review=rows.length-good-bad;
+  const latest=[...rows].reverse().find(r=>finite(r.minT)!==null&&finite(r.maxT)!==null);
+  const low=latest?.minT,high=latest?.maxT,rhLow=latest?.minRH,rhHigh=latest?.maxRH;
+  const chart=(key,label,lo,hi)=>visualChart(rows.filter(r=>finite(r[key])!==null).map(r=>({date:r.date,value:Number(r[key])})),{label,low:finite(lo)??NaN,high:finite(hi)??NaN,analysisRows:accumulated.filter(r=>finite(r[key])!==null).map(r=>({date:r.date,value:Number(r[key])}))});
+  const fmt=x=>finite(x)===null?'—':Number(x).toFixed(3);
+  result.innerHTML=`<div class="cc100-kpis"><div><small>Controles del mes</small><strong>${rows.length}</strong></div><div><small>Conformes</small><strong>${good}</strong></div><div><small>No conformes</small><strong>${bad}</strong></div><div><small>Revisión metrológica</small><strong>${review}</strong></div><div><small>Acumuladas hasta ${esc(m)}</small><strong>${accumulated.length}</strong></div></div><p class="cc107-status cc107-info">Histórico físico y digital consolidado. Se muestra un registro por fecha; prevalece el digital en coincidencias, sin borrar el físico. Para históricos se aplica automáticamente la configuración metrológica vigente desde su fecha de inicio, con interpolación por lectura. Fuera del rango calibrado o sin configuración válida se indica REVISIÓN METROLÓGICA. Westgard: análisis exploratorio hasta aprobar una referencia estadística independiente.</p><div class="cc100-charts"><article class="cc100-card"><h3>Temperatura corregida (°C)</h3>${chart('tempCorrected','Temperatura',low,high)}</article>${tempOnly?'':`<article class="cc100-card"><h3>Humedad relativa corregida (%)</h3>${chart('rhCorrected','Humedad relativa',rhLow,rhHigh)}</article>`}</div><article class="cc100-card"><h3>Historial único y trazabilidad · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Responsable</th><th>T leída</th><th>Corrección T</th><th>T corregida</th>${tempOnly?'':'<th>HR leída</th><th>Corrección HR</th><th>HR corregida</th>'}<th>Decisión técnica</th><th>Certificado / fuente</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.responsibleName||r.completedBy||'—')}</td><td>${fmt(r.tempRead)}</td><td>${fmt(r.tempFactor)}</td><td>${fmt(r.tempCorrected)}</td>${tempOnly?'':`<td>${fmt(r.rhRead)}</td><td>${fmt(r.rhFactor)}</td><td>${fmt(r.rhCorrected)}</td>`}<td>${esc(evaluate(r).replaceAll('_',' '))}</td><td>${esc(r.certificate||r.source||'—')}</td></tr>`).join('')||`<tr><td colspan="${tempOnly?8:11}">Sin mediciones en el mes seleccionado.</td></tr>`}</tbody></table></div></article>`;
  }catch(e){if(ticket===seq)result.innerHTML=`<p class="form-error">No se pudo consultar Firebase: ${esc(e.message)}. Revise las reglas de lectura de environmentalRecords.</p>`}
  };
  const syncCards=async()=>{try{const snapshot=await getDocs(collection(db,'environmentalCards'));const selected=sel.value;for(const d of snapshot.docs){const data=d.data();const entry=available.find(c=>c.id===d.id);if(entry){entry.name=data.name||entry.name;}else available.push({id:d.id,name:data.name||d.id,kind:'ENV'});}sel.innerHTML=available.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');if(available.some(c=>c.id===selected))sel.value=selected;const count=host.querySelector('#ccUnifiedCount');if(count)count.textContent=`(${available.length} disponibles)`;showAll.textContent=`Ver todas las ${available.length} cartas ▾`;updateMasterCount();}catch(e){console.warn('No se pudo sincronizar el catálogo de cartas ambientales',e);}};

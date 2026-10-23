@@ -975,7 +975,7 @@ service cloud.firestore {
     // Archivo inmutable; validación del documento y su identidad canónica.
     // La conformidad técnica histórica requiere cotejo documental por el JEFE.
     allow create: if boss()
-      && request.resource.data.keys().hasOnly(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt'])
+      && request.resource.data.keys().hasOnly(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt','correctionEstimated','technicalLimits','technicalResultAutomatic'])
       && request.resource.data.keys().hasAll(['date','cardId','cardKey','cardName','family','origin','readings','corrected','correction','corrections','correctionBasis','certificate','criterion','conforms','status','responsibleName','responsibleUid','source','observations','digitizedBy','digitizedAt'])
       && request.resource.data.origin=='HISTORICO_MANUAL'
       && request.resource.data.date is string && request.resource.data.date.size()==10
@@ -988,7 +988,43 @@ service cloud.firestore {
       && request.resource.data.corrected is list && request.resource.data.corrected.size()==request.resource.data.readings.size()
       && request.resource.data.correction is number && request.resource.data.correction>=-30 && request.resource.data.correction<=30
       && request.resource.data.corrections is list && request.resource.data.corrections.size()==request.resource.data.readings.size()
-      && request.resource.data.correctionBasis in ['PATRON','EQUIPO','NINGUNA']
+      && request.resource.data.correctionBasis in ['PATRON','EQUIPO','NINGUNA','CONFIGURACION_ACTUAL_ESTIMADA']
+      && (request.resource.data.correctionBasis != 'CONFIGURACION_ACTUAL_ESTIMADA' || (
+           request.resource.data.cardId == 'INCUBATOR-EI306'
+           && request.resource.data.family == 'TERMICO'
+           && request.resource.data.readings.size() == 1
+           && request.resource.data.get('correctionEstimated',false) == true
+           && request.resource.data.get('technicalResultAutomatic',false) == true
+           && request.resource.data.get('technicalLimits',{}) is map
+           && request.resource.data.technicalLimits.keys().hasOnly(['min','max'])
+           && request.resource.data.technicalLimits.min is number
+           && request.resource.data.technicalLimits.max is number
+           && request.resource.data.technicalLimits.min < request.resource.data.technicalLimits.max
+           && closeNumber(request.resource.data.corrected[0],request.resource.data.readings[0]+request.resource.data.correction)
+           && closeNumber(request.resource.data.corrections[0],request.resource.data.correction)
+           && request.resource.data.conforms == (request.resource.data.corrected[0] >= request.resource.data.technicalLimits.min && request.resource.data.corrected[0] <= request.resource.data.technicalLimits.max)
+         ))
+      // Campos técnicos opcionales: no obligatorios para cartas anteriores.
+      && (request.resource.data.correctionBasis == 'CONFIGURACION_ACTUAL_ESTIMADA' || (
+           !('correctionEstimated' in request.resource.data)
+           && !('technicalLimits' in request.resource.data)
+           && !('technicalResultAutomatic' in request.resource.data)
+         ))
+      // Balanza EI-227: conformidad calculada de las dos masas, no declarada libremente.
+      && (request.resource.data.cardId != 'PEC0104-06-BALANZA-EI227' || (
+           request.resource.data.family == 'BALANZA'
+           && request.resource.data.readings.size() == 2
+           && request.resource.data.correctionBasis == 'NINGUNA'
+           && request.resource.data.correction == 0
+           && request.resource.data.corrections[0] == 0
+           && request.resource.data.corrections[1] == 0
+           && closeNumber(request.resource.data.corrected[0],request.resource.data.readings[0])
+           && closeNumber(request.resource.data.corrected[1],request.resource.data.readings[1])
+           && request.resource.data.conforms == (
+             request.resource.data.readings[0] >= 0.999 && request.resource.data.readings[0] <= 1.001
+             && request.resource.data.readings[1] >= 99.998 && request.resource.data.readings[1] <= 100.002
+           )
+         ))
       && request.resource.data.certificate is string && request.resource.data.certificate.size()>=4 && request.resource.data.certificate.size()<=200
       && request.resource.data.criterion is string && request.resource.data.criterion.size()>=4 && request.resource.data.criterion.size()<=200
       && request.resource.data.conforms is bool
