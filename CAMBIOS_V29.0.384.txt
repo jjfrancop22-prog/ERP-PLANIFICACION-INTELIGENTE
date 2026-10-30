@@ -1,0 +1,6 @@
+V29.0.384 - Rectificación administrativa
+- Modalidad de rectificación con consumos registrado y real e IDs de movimientos originales (referencia documental).
+- Asiento AJUSTE inmutable con metadatos de corrección y transacción atómica.
+- Validación de diferencia en cliente y reglas.
+- Mensaje de permisos actualizado.
+IMPORTANTE: publicar firestore.rules en Firebase y desplegar el ZIP. La referencia a IDs es documental; la verificación automática de su existencia y prevención de una segunda rectificación sobre los mismos IDs requiere una ampliación posterior. No se implementaron solicitudes de analistas.

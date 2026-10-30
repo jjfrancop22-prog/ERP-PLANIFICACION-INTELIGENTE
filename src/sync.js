@@ -275,10 +275,11 @@ export async function consumeReagent({reagentId,operationId,quantity,measurement
  }catch(e){logError(e);throw e}finally{syncState.pending--;emit()}
 }
 // Corrección administrativa con asiento inmutable y transacción idempotente.
-export async function adjustReagent({reagentId,operationId,delta,notes},uid){
+export async function adjustReagent({reagentId,operationId,delta,notes,correction=null},uid){
  if(!navigator.onLine)throw Error('Se requiere conexión para confirmar el ajuste.');
  if(!Number.isFinite(delta)||delta===0)throw Error('El ajuste debe ser distinto de cero.');
  if(!notes||notes.trim().length<8)throw Error('Explique el motivo del ajuste (mínimo 8 caracteres).');
+ if(correction && (!Number.isFinite(correction.registered)||!Number.isFinite(correction.actual)||correction.registered<=correction.actual||Math.abs(delta-(correction.registered-correction.actual))>0.000001))throw Error('La diferencia de rectificación no coincide con el consumo registrado y real.');
  syncState.pending++;syncState.lastEvent='saving';emit();
  try{
   const ref=doc(db,'reagents',reagentId),movementRef=doc(db,'reagents',reagentId,'movements',operationId);
@@ -292,7 +293,7 @@ export async function adjustReagent({reagentId,operationId,delta,notes},uid){
    if(after<0)throw Error('El ajuste no puede dejar stock negativo. Disponible: '+data.stock);
    const version=data.version+1;
    tx.update(ref,{stock:after,version,updatedAt:serverTimestamp(),updatedBy:uid,lastOperationId:operationId});
-   tx.set(movementRef,{id:operationId,reagentId,uid,kind:'AJUSTE',quantity,unit:data.unit,control:data.control,stockBefore:data.stock,stockAfter:after,version,measurement:{method:'AJUSTE',direction:delta>0?'POSITIVO':'NEGATIVO'},notes:notes.trim(),createdAt:serverTimestamp()});
+   tx.set(movementRef,{id:operationId,reagentId,uid,kind:'AJUSTE',quantity,unit:data.unit,control:data.control,stockBefore:data.stock,stockAfter:after,version,measurement:{method:'AJUSTE',direction:delta>0?'POSITIVO':'NEGATIVO',...(correction?{correction}: {})},notes:notes.trim(),createdAt:serverTimestamp()});
    return {duplicate:false,stock:after};
   });
   syncState.lastConfirmed=new Date();syncState.serverConfirmed=true;syncState.lastEvent='confirmed';emit();return result;
