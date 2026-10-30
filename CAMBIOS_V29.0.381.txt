@@ -1,0 +1,11 @@
+V29.0.381 - Corrección digital auditada EI-306
+- En histórico consolidado EI-306 se habilita Editar para registros digitales, incluido 23/10.
+- Correcciones en colección separada; original en incubator306Records no se modifica.
+- Cada revisión crea un registro de auditoría inmutable mediante transacción.
+- Recalcula gráfica, límites e indicadores desde la lectura corregida y la corrección original.
+- Los registros físicos conservan su flujo de corrección previo.
+- Incluye reglas nuevas firestore.rules para las colecciones de correcciones y auditoría.
+IMPORTANTE: desplegar firestore.rules de manera controlada antes de usar la edición. No se desplegaron reglas ni se tocó Firebase.
+- No se implementó suspensión automática de 30 minutos: sería arriesgado para sincronización y no demuestra ahorro de lecturas.
+- Edición mediante diálogos nativos por seguridad de alcance; rediseño visual completo pendiente.
+- Validación: node --check de unified-analytics.js. No se han ejecutado pruebas reales de Firebase.

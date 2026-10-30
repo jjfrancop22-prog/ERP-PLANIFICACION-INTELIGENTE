@@ -4,7 +4,7 @@ import {INC306_ID,inc306Config} from './incubator306.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const familyOf=c=>isEnvironmental(c)?(/nevera|congelador/i.test(c.name)?'TEMPERATURA':'AMBIENTAL'):c.kind==='CONDUCTIVIDAD'?'CONDUCTIVIDAD':/balanza/i.test(c.name)?'BALANZA':/ambiental|condiciones/i.test(c.name)?'AMBIENTAL':/nevera|congelador/i.test(c.name)?'TEMPERATURA':/digestor|incubadora|estufa|mufla|baño/i.test(c.name)?'TERMICO':'GENERAL';
 const isEnvironmental=c=>['ENV','ENV_SPECIAL'].includes(c.kind)||/condiciones ambientales|nevera|congelador/i.test(c.name);
-const labels=c=>isEnvironmental(c)?(/nevera|congelador/i.test(c.name)?['Temperatura (°C)']:['Temperatura (°C)','Humedad relativa (%)']):c.kind==='CONDUCTIVIDAD'?['84 µS/cm','1413 µS/cm','12.88 mS/cm']:/balanza/i.test(c.name)?['1 g','100 g']:/ambiental|condiciones/i.test(c.name)?['Temperatura (°C)','Humedad relativa (%)']:/nevera|congelador|digestor|incubadora|estufa|mufla|baño|destilador/i.test(c.name)?['Lectura']:['Lectura 1'];
+const labels=c=>/EI\s*[-–]?\s*(?:316|328)/i.test([c.id,c.name,c.code,c.equipment].join(' '))?['Temperatura (°C)']:isEnvironmental(c)?(/nevera|congelador/i.test(c.name)?['Temperatura (°C)']:['Temperatura (°C)','Humedad relativa (%)']):c.kind==='CONDUCTIVIDAD'?['84 µS/cm','1413 µS/cm','12.88 mS/cm']:/balanza/i.test(c.name)?['1 g','100 g']:/ambiental|condiciones/i.test(c.name)?['Temperatura (°C)','Humedad relativa (%)']:/nevera|congelador|digestor|incubadora|estufa|mufla|baño|destilador/i.test(c.name)?['Lectura']:['Lectura 1'];
 export async function loadGenericHistory(card,month){const s=await getDocs(query(collection(db,'historicalControlArchive'),where('date','>=',month+'-01'),where('date','<',month+'-32')));const originals=s.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.cardId===card.id);const fixes=await getDocs(query(collection(db,'historicalControlArchiveCorrections'),where('date','>=',month+'-01'),where('date','<',month+'-32')));const byId=new Map(fixes.docs.map(d=>[d.id,d.data()]));return originals.map(r=>({...r,...(byId.get(r.id)||{})})).sort((a,b)=>a.date.localeCompare(b.date));}
 // Read the documented physical series up to the selected month, preserving original
 // entries and correction overlays. Never mix card IDs or later observations.
@@ -17,12 +17,13 @@ export async function loadGenericHistoryThrough(card,month){
   .map(r=>({...r,...(byId.get(r.id)||{})})).sort((a,b)=>a.date.localeCompare(b.date));
 }
 export async function openGenericHistory(card,month,onSaved){
+ const auto316=/EI\s*[-–]?\s*316/i.test([card.id,card.name,card.code,card.equipment].join(' '));
  const auto306=card.id===INC306_ID || /EI\s*[-–]?\s*306/i.test([card.name,card.code,card.equipment].filter(Boolean).join(' '));
  const autoBalance=card.id==='PEC0104-06-BALANZA-EI227';
  const fallback344=card.id==='MC1602-08-NEVERA-PATRONES-EI344'||/EI\s*[-–]?\s*344/i.test([card.name,card.code,card.equipment].filter(Boolean).join(' '));
  // EI-344 sigue el mismo motor ambiental automático que EI-269.
  // La configuración aplicable se selecciona por vigencia documental.
- const autoEnv=!auto306&&isEnvironmental(card);
+ const autoEnv=!auto306&&!auto316&&isEnvironmental(card);
  const envConfigs=autoEnv?(await getDocs(query(collection(db,'environmentalConfigs'),where('cardId','==',card.id)))).docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>b.validFrom.localeCompare(a.validFrom)):[];
  const configFor=date=>envConfigs.find(c=>c.validFrom<=date);
  const interpolate=(points,value)=>{const a=[...(points||[])].sort((x,y)=>x.indication-y.indication);if(a.length<2||value<a[0].indication||value>a[a.length-1].indication)return null;for(let i=1;i<a.length;i++){if(value<=a[i].indication){const x=a[i-1],y=a[i],dx=y.indication-x.indication;return dx>0?-(x.error+(y.error-x.error)*(value-x.indication)/dx):null;}}return null;};

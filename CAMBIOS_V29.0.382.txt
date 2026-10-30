@@ -1,0 +1,7 @@
+V29.0.382 - Optimización visual segura de EI-306
+- Tabla de histórico y edición EI-306 plegable, conservando gráfica principal visible y datos originales.
+- Cabeceras fijas en tabla desplazable.
+- Bloqueo preventivo de correcciones cuando el registro original no contiene parámetros metrológicos numéricos válidos.
+- Se mantiene la edición auditada de V29.0.381 y sus reglas; no se modifican reglas Firestore ni otras cartas.
+- No se agrega suspensión automática por inactividad: requiere pruebas específicas de listeners y sincronización.
+- Pendiente validación real con Firebase y pruebas de permisos antes de producción.

@@ -5,14 +5,14 @@ import {DQO360_ID,dqo360Config} from './dqo360.js';
 import {BATH364_ID,bath364Config} from './bath364.js';
 import {MICRO365_ID,micro365Config} from './micro365.js';
 import {INC306_ID,inc306Config} from './incubator306.js';
-import {OVEN316_ID} from './oven316.js';
-import {MUFLA328_ID} from './mufla328.js';
+import {OVEN316_ID,oven316Config} from './oven316.js';
+import {MUFLA328_ID,mufla328Config} from './mufla328.js';
 import {N105_ID,n105Config} from './thermal105.js';
 import {HACH_ID,renderHACHAnalytics} from './thermal161.js';
 import {BALANCE227_ID,renderBalance227Analytics} from './balance227.js';
 import {NTK_ID,renderNTKAnalytics} from './thermal154.js';
-import {collection,getDocs,query,where} from 'firebase/firestore';
-import {db} from './firebase.js';
+import {collection,doc,getDoc,getDocs,query,where,runTransaction,serverTimestamp} from 'firebase/firestore';
+import {db,auth} from './firebase.js';
 import {mountControlAnalytics} from './control-analytics.js';
 import {mountConductivityAnalytics} from './conductivity-analytics.js';
 import {balanceEnvironmentalCardId,dboEnvironmentalCardId,microEnvironmentalCardId,fridgeEnvironmentalCardId,standardsFridgeEnvironmentalCardId,agarFridgeEnvironmentalCardId,freezerEnvironmentalCardId} from './environmental.js';
@@ -93,7 +93,7 @@ export function mountUnifiedAnalytics(host,cards,profile){
  if(previous.card&&available.some(c=>c.id===previous.card))sel.value=previous.card;
  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(previous.month||''))month.value=previous.month;
  const load=async()=>{const ticket=++seq,card=available.find(c=>c.id===sel.value),m=month.value;try{sessionStorage.setItem('psi-analytics-choice',JSON.stringify({card:sel.value,month:m}))}catch{};host.querySelectorAll('.cc-generic-archive').forEach(x=>x.remove());result.innerHTML='<p class="muted">Consultando registros en Firebase…</p>';history.hidden=false;history.onclick=()=>openGenericHistory(card,m,load);if(!card)return;
- if(card.id!==N105_ID&&card.id!==DQO360_ID&&card.id!==BATH364_ID&&card.id!==MICRO365_ID&&card.id!==INC306_ID&&card.id!==BALANCE227_ID&&card.kind!=='ENV'&&card.kind!=='ENV_SPECIAL'&&!['MULTIPUNTO','THERMAL161','THERMAL154','CONDUCTIVIDAD'].includes(card.kind)){
+ if(card.id!==MUFLA328_ID&&card.id!==N105_ID&&card.id!==DQO360_ID&&card.id!==BATH364_ID&&card.id!==MICRO365_ID&&card.id!==INC306_ID&&card.id!==BALANCE227_ID&&card.kind!=='ENV'&&card.kind!=='ENV_SPECIAL'&&!['MULTIPUNTO','THERMAL161','THERMAL154','CONDUCTIVIDAD'].includes(card.kind)){
   // Show archived readings independently of the specialized daily-record engine.
   // Never overwrite daily records or claim a validated Westgard baseline.
   loadGenericHistory(card,m).then(rows=>{
@@ -106,9 +106,10 @@ export function mountUnifiedAnalytics(host,cards,profile){
  if(card.id===INC306_ID){
   try{
    const c=await inc306Config();
-   const [snap,archive]=await Promise.all([
+   const [snap,archive,correctionsSnap]=await Promise.all([
     getDocs(collection(db,'incubator306Records')),
-    loadGenericHistoryThrough(card,m)
+    loadGenericHistoryThrough(card,m),
+    getDocs(collection(db,'incubator306DigitalCorrections'))
    ]);
    if(ticket!==seq)return;
    const scalar=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
@@ -121,23 +122,122 @@ export function mountUnifiedAnalytics(host,cards,profile){
     const correctionInfo=historicalThermalValue(r,raw,{correction:c.patternCorrection});
     map.set(r.date,{date:r.date,raw,...correctionInfo,origin:'Histórico físico',responsible:r.responsibleName||''});
    }
+   const correctionsByDate=new Map(correctionsSnap.docs.map(d=>[d.id,d.data()]));
    for(const d of snap.docs){
-    const r=d.data();
+    const original=d.data();
+    const revision=correctionsByDate.get(d.id);
+    const r=revision?{...original,...revision}:original;
     if(r.cardId!==INC306_ID||typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
     const raw=scalar(r.pattern),saved=scalar(r.patternCorrected);
     if(raw===null)continue;
     const recordedCorrection=scalar(r.patternCorrection);
     const correction=saved!==null?saved-raw:recordedCorrection!==null?recordedCorrection:scalar(c.patternCorrection);
     const value=saved!==null?saved:correction!==null?raw+correction:raw;
-    map.set(r.date,{date:r.date,raw,value,correction,estimated:saved===null&&recordedCorrection===null,origin:'Digital',responsible:r.responsibleName||''});
+    map.set(r.date,{date:r.date,raw,value,correction,estimated:saved===null&&recordedCorrection===null,origin:revision?'Digital · corregido':'Digital',responsible:r.responsibleName||'',digital:true});
    }
+   // Correcciones digitales: el documento original permanece inalterado.
+   // La edición exige motivo y crea una auditoría inmutable en la misma transacción.
    const series=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
    const monthly=series.filter(r=>r.date.slice(0,7)===m);
    const min=Number(c.min),max=Number(c.max);
    const good=monthly.filter(r=>r.value>=min&&r.value<=max).length;
    const chart=visualChart(monthly,{label:'Incubadora DBO5 EI-306 · temperatura corregida',low:min,high:max,unit:'°C',precision:3,analysisRows:series});
-   result.innerHTML=`<div class="cc100-kpis"><div><small>Mediciones del mes</small><strong>${monthly.length}</strong></div><div><small>Conformes técnicos</small><strong>${good}</strong></div><div><small>No conformes técnicos</small><strong>${monthly.length-good}</strong></div><div><small>Mediciones acumuladas (físicas + digitales)</small><strong>${series.length}</strong></div><div><small>Equipo / patrón</small><strong>EI-306 · ${esc(c.reference||'PF/09')}</strong></div></div><p class="cc107-status cc107-info">Incubadora DBO5 EI-306 · objetivo ${esc(c.center)} °C; límites configurados: ${esc(c.min)}–${esc(c.max)} °C. La serie consolidada integra históricos físicos y controles digitales hasta ${esc(m)}; la gráfica muestra solo el mes seleccionado. Ante coincidencias de fecha prevalece el registro digital sin eliminar el histórico. Las señales Westgard son exploratorias y no equivalen a límites estadísticos aprobados. ${series.some(r=>r.estimated)?'⚠ Algunas correcciones se estimaron usando la configuración actual: verificar el certificado y su vigencia antes de aprobar resultados.':''}</p><article class="cc100-card"><h3>Temperatura corregida (°C) · ${esc(m)}</h3>${chart}</article><article class="cc100-card"><h3>Histórico consolidado · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Lectura PF/09</th><th>Corrección</th><th>Temperatura corregida</th><th>Conformidad técnica</th><th>Responsable</th></tr></thead><tbody>${monthly.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.raw)}</td><td>${r.correction===null?'SIN DATO':esc(r.correction.toFixed(3))}${r.estimated?' ⚠ estimada':''}</td><td>${esc(r.value.toFixed(3))}</td><td>${r.value>=min&&r.value<=max?'CONFORME':'NO CONFORME'}</td><td>${esc(r.responsible)}</td></tr>`).join('')||'<tr><td colspan="7">Sin registros de este mes para EI-306.</td></tr>'}</tbody></table></div></article>`;
+   result.innerHTML=`<div class="cc100-kpis"><div><small>Mediciones del mes</small><strong>${monthly.length}</strong></div><div><small>Conformes técnicos</small><strong>${good}</strong></div><div><small>No conformes técnicos</small><strong>${monthly.length-good}</strong></div><div><small>Mediciones acumuladas (físicas + digitales)</small><strong>${series.length}</strong></div><div><small>Equipo / patrón</small><strong>EI-306 · ${esc(c.reference||'PF/09')}</strong></div></div><p class="cc107-status cc107-info">Incubadora DBO5 EI-306 · objetivo ${esc(c.center)} °C; límites configurados: ${esc(c.min)}–${esc(c.max)} °C. La serie consolidada integra históricos físicos y controles digitales hasta ${esc(m)}; la gráfica muestra solo el mes seleccionado. Ante coincidencias de fecha prevalece el registro digital sin eliminar el histórico. Las señales Westgard son exploratorias y no equivalen a límites estadísticos aprobados. ${series.some(r=>r.estimated)?'⚠ Algunas correcciones se estimaron usando la configuración actual: verificar el certificado y su vigencia antes de aprobar resultados.':''}</p><article class="cc100-card"><h3>Temperatura corregida (°C) · ${esc(m)}</h3>${chart}</article><details class="cc100-card cc382-history"><summary>Histórico consolidado · ${esc(m)} (${monthly.length} registros) · Ver / ocultar tabla y correcciones</summary><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Lectura PF/09</th><th>Corrección</th><th>Temperatura corregida</th><th>Conformidad técnica</th><th>Responsable</th><th>Corrección autorizada</th></tr></thead><tbody>${monthly.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.raw)}</td><td>${r.correction===null?'SIN DATO':esc(r.correction.toFixed(3))}${r.estimated?' ⚠ estimada':''}</td><td>${esc(r.value.toFixed(3))}</td><td>${r.value>=min&&r.value<=max?'CONFORME':'NO CONFORME'}</td><td>${esc(r.responsible)}</td><td>${r.digital?`<button type="button" class="outline ei306-edit" data-date="${esc(r.date)}">Editar</button>`:'Hoja física'}</td></tr>`).join('')||'<tr><td colspan="8">Sin registros de este mes para EI-306.</td></tr>'}</tbody></table></div></details>`;
+   result.querySelectorAll('.ei306-edit').forEach(button=>button.onclick=async()=>{
+    const date=button.dataset.date,recordId=date+'_'+INC306_ID;
+    if(!auth.currentUser){alert('Debe iniciar sesión para corregir registros.');return;}
+    const originalSnap=await getDoc(doc(db,'incubator306Records',recordId));
+    if(!originalSnap.exists()){alert('No se encontró el registro original.');return;}
+    const overlaySnap=await getDoc(doc(db,'incubator306DigitalCorrections',recordId));
+    const current=overlaySnap.exists()?overlaySnap.data():originalSnap.data();
+    const input=prompt('EI-306 · '+date+'\nLectura corregida PF/09 (°C):',String(current.pattern));
+    if(input===null)return;
+    const value=Number(input.trim().replace(',','.'));
+    if(!input.trim()||!Number.isFinite(value)){alert('Ingrese una temperatura numérica válida.');return;}
+    const reason=prompt('Motivo documentado de la corrección (mínimo 10 caracteres):');
+    if(reason===null)return;
+    if(reason.trim().length<10){alert('El motivo debe contener al menos 10 caracteres.');return;}
+    if(!confirm('Se conservará el registro digital original y se añadirá una revisión auditada. ¿Continuar?'))return;
+    button.disabled=true;
+    try{
+     await runTransaction(db,async tx=>{
+      const originalRef=doc(db,'incubator306Records',recordId);
+      const correctionRef=doc(db,'incubator306DigitalCorrections',recordId);
+      const orig=await tx.get(originalRef),prev=await tx.get(correctionRef);
+      if(!orig.exists())throw Error('Registro original inexistente');
+      const before=prev.exists()?prev.data():orig.data();
+      const revision=prev.exists()?prev.data().auditRevision+1:1;
+      const calibration=Number(orig.data().patternCorrection);
+      const lower=Number(orig.data().min),upper=Number(orig.data().max);
+      if(!Number.isFinite(calibration)||!Number.isFinite(lower)||!Number.isFinite(upper)||lower>upper)throw Error('Configuración metrológica original incompleta: no se permite guardar una corrección sin límites y corrección documentados.');
+      const corrected=value+calibration;
+      const conforms=corrected>=lower&&corrected<=upper;
+      const after={cardId:INC306_ID,date,pattern:value,patternCorrected:corrected,patternCorrection:calibration,conforms,status:conforms?'COMPLETADA':'NO_CONFORME',auditRevision:revision,reason:reason.trim(),correctedBy:auth.currentUser.uid,correctedAt:serverTimestamp()};
+      tx.set(correctionRef,after);
+      tx.set(doc(db,'incubator306DigitalAudits',recordId+'_r'+revision),{recordId,revision,before,after:{...after,correctedAt:null},reason:reason.trim(),correctedBy:auth.currentUser.uid,correctedAt:serverTimestamp()});
+     });
+     await load();
+    }catch(error){alert('No se pudo guardar la corrección: '+error.message);button.disabled=false;}
+   });
   }catch(e){if(ticket===seq)result.textContent='No se pudo cargar el análisis EI-306: '+e.message;}
+  return;
+ }
+ if(card.id===MUFLA328_ID || /EI\s*[-–]?\s*328/i.test([card.name,card.code,card.equipment].join(' '))){
+  try{
+   const [c,snap,archive]=await Promise.all([
+    mufla328Config(),
+    getDocs(query(collection(db,'thermalControlRecords'),where('cardId','==',MUFLA328_ID))),
+    loadGenericHistoryThrough(card,m)
+   ]);
+   if(ticket!==seq)return;
+   const map=new Map();
+   for(const r of archive){
+    if(typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
+    const raw=Number(r.readings?.[0]);if(r.readings?.[0]==null||!Number.isFinite(raw))continue;
+    const info=historicalThermalValue(r,raw,c);
+    map.set(r.date,{date:r.date,raw,...info,origin:'Histórico físico',responsible:r.responsibleName||''});
+   }
+   for(const d of snap.docs){const r=d.data();
+    if(typeof r.date!=='string'||r.date.slice(0,7)>m||r.cardId!==MUFLA328_ID)continue;
+    const raw=Number(r.reading),value=Number(r.corrected);
+    if(!Number.isFinite(raw)||!Number.isFinite(value))continue;
+    map.set(r.date,{date:r.date,raw,value,correction:value-raw,origin:'Digital',responsible:r.responsibleName||''});
+   }
+   const series=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
+   const monthly=series.filter(r=>r.date.slice(0,7)===m);
+   const min=Number(c.min),max=Number(c.max),good=monthly.filter(r=>r.value>=min&&r.value<=max).length;
+   const chart=visualChart(monthly,{label:'Mufla EI-328 · temperatura corregida',low:min,high:max,unit:'°C',precision:2,analysisRows:series});
+   result.innerHTML=`<div class="cc100-kpis"><div><small>Controles del mes</small><strong>${monthly.length}</strong></div><div><small>Conformes técnicos</small><strong>${good}</strong></div><div><small>No conformes técnicos</small><strong>${monthly.length-good}</strong></div><div><small>Acumulados hasta ${esc(m)}</small><strong>${series.length}</strong></div></div><p class="cc107-status cc107-info">Mufla EI-328 · una sola gráfica con registros físicos y digitales. Límites ${esc(c.min)}–${esc(c.max)} °C. La medición digital prevalece cuando coinciden fechas, sin borrar el original físico. Las señales Westgard son exploratorias mientras no exista referencia estadística aprobada. ${series.some(r=>r.estimated)?'⚠ Existen correcciones históricas estimadas con la configuración actual; confirmar vigencia del certificado antes de aprobar resultados.':''}</p><article class="cc100-card"><h3>Temperatura corregida (°C) · ${esc(m)}</h3>${chart}</article><article class="cc100-card"><h3>Histórico consolidado · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Lectura</th><th>Corrección</th><th>Temperatura corregida</th><th>Dictamen técnico</th><th>Responsable</th></tr></thead><tbody>${monthly.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.raw)}</td><td>${r.correction==null?'SIN DATO':esc(r.correction.toFixed(3))}${r.estimated?' ⚠ estimada':''}</td><td>${esc(r.value.toFixed(3))}</td><td>${r.value>=min&&r.value<=max?'CONFORME':'NO CONFORME'}</td><td>${esc(r.responsible)}</td></tr>`).join('')||'<tr><td colspan="7">Sin registros de EI-328 en el mes seleccionado.</td></tr>'}</tbody></table></div></article>`;
+  }catch(e){if(ticket===seq)result.textContent='No se pudo cargar el histórico EI-328: '+e.message;}
+  return;
+ }
+ if(card.id===OVEN316_ID || /EI\s*[-–]?\s*316/i.test([card.name,card.code,card.equipment].join(' '))){
+  try{
+   const [c,snap,archive]=await Promise.all([
+    oven316Config(),
+    getDocs(query(collection(db,'thermalControlRecords'),where('cardId','==',OVEN316_ID))),
+    loadGenericHistoryThrough(card,m)
+   ]);
+   if(ticket!==seq)return;
+   const map=new Map();
+   for(const r of archive){
+    if(typeof r.date!=='string'||r.date.slice(0,7)>m)continue;
+    const raw=Number(r.readings?.[0]);if(r.readings?.[0]==null||!Number.isFinite(raw))continue;
+    const info=historicalThermalValue(r,raw,c);
+    map.set(r.date,{date:r.date,raw,...info,origin:'Histórico físico',responsible:r.responsibleName||''});
+   }
+   for(const d of snap.docs){const r=d.data();
+    if(typeof r.date!=='string'||r.date.slice(0,7)>m||r.cardId!==OVEN316_ID)continue;
+    const raw=Number(r.reading),value=Number(r.corrected);
+    if(!Number.isFinite(raw)||!Number.isFinite(value))continue;
+    map.set(r.date,{date:r.date,raw,value,correction:value-raw,origin:'Digital',responsible:r.responsibleName||''});
+   }
+   const series=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
+   const monthly=series.filter(r=>r.date.slice(0,7)===m);
+   const min=Number(c.min),max=Number(c.max),good=monthly.filter(r=>r.value>=min&&r.value<=max).length;
+   const chart=visualChart(monthly,{label:'Estufa EI-316 · temperatura corregida',low:min,high:max,unit:'°C',precision:2,analysisRows:series});
+   result.innerHTML=`<div class="cc100-kpis"><div><small>Controles del mes</small><strong>${monthly.length}</strong></div><div><small>Conformes técnicos</small><strong>${good}</strong></div><div><small>No conformes técnicos</small><strong>${monthly.length-good}</strong></div><div><small>Acumulados hasta ${esc(m)}</small><strong>${series.length}</strong></div></div><p class="cc107-status cc107-info">Estufa EI-316 · una sola gráfica con registros físicos y digitales. Límites ${esc(c.min)}–${esc(c.max)} °C. La medición digital prevalece cuando coinciden fechas, sin borrar el original físico. Las señales Westgard son exploratorias mientras no exista referencia estadística aprobada. ${series.some(r=>r.estimated)?'⚠ Existen correcciones históricas estimadas con la configuración actual; confirmar vigencia del certificado antes de aprobar resultados.':''}</p><article class="cc100-card"><h3>Temperatura corregida (°C) · ${esc(m)}</h3>${chart}</article><article class="cc100-card"><h3>Histórico consolidado · ${esc(m)}</h3><div class="cc100-tablewrap"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Lectura</th><th>Corrección</th><th>Temperatura corregida</th><th>Dictamen técnico</th><th>Responsable</th></tr></thead><tbody>${monthly.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.origin)}</td><td>${esc(r.raw)}</td><td>${r.correction==null?'SIN DATO':esc(r.correction.toFixed(3))}${r.estimated?' ⚠ estimada':''}</td><td>${esc(r.value.toFixed(3))}</td><td>${r.value>=min&&r.value<=max?'CONFORME':'NO CONFORME'}</td><td>${esc(r.responsible)}</td></tr>`).join('')||'<tr><td colspan="7">Sin registros de EI-316 en el mes seleccionado.</td></tr>'}</tbody></table></div></article>`;
+  }catch(e){if(ticket===seq)result.textContent='No se pudo cargar el histórico EI-316: '+e.message;}
   return;
  }
  if(card.id===DQO360_ID||card.id===BATH364_ID||card.id===MICRO365_ID){

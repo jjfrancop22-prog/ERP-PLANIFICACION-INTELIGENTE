@@ -1,0 +1,1 @@
+V29.0.378: Corrección focalizada de EI-316. Histórico: un campo de temperatura; vista unificada con registros físicos y digitales y una gráfica. No se alteran reglas ni documentos Firebase. Correcciones históricas no documentadas se identifican como estimadas. Pendiente validar en Firebase real.

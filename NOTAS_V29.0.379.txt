@@ -1,0 +1,1 @@
+EI-328: carga histórica con una lectura de temperatura; análisis unificado de registros históricos y digitales; gráfica única y corrección térmica según configuración. No se alteran datos ni reglas Firestore. Validar con registros reales en Firebase.

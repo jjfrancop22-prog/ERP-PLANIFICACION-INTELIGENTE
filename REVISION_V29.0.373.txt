@@ -1,0 +1,10 @@
+V29.0.373 — Optimización controlada de lecturas
+BASE: ERP_NEXTGEN_V29.0.372_FIX_PERMISOS_CONSUMO(2).zip
+CAMBIO FUNCIONAL ÚNICO: src/main.js / refreshReadWatches.
+Antes: hasta 80 escuchas permanentes del último mensaje, incluyendo expedientes históricos terminados.
+Ahora: escucha todas las actividades no realizadas y las 20 actividades más recientes; elimina escuchas de actividades terminadas antiguas. Los chats históricos siguen accesibles bajo demanda desde el Centro de Comunicaciones.
+No se modificaron escrituras, Firestore rules, cartas, inventario, consumos, cierre ni lógica metrológica.
+Versiones actualizadas: package.json, version.json y src/version.js.
+VALIDACIÓN: sintaxis JavaScript comprobada con node --check. Build completo no verificado (instalación npm no finalizó en este entorno).
+ADVERTENCIA: los avisos en vivo de mensajes nuevos de actividades terminadas antiguas no se mostrarán hasta consultar esos expedientes. Para conservar alertas en tiempo real de todos los históricos se requiere otro diseño (bandeja agregada).
+Implementar primero en entorno de prueba y medir lecturas; no garantiza alcanzar 15.000/día.

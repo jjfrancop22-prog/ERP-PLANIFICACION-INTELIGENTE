@@ -1,0 +1,5 @@
+V29.0.375: optimización conservadora de Mi Jornada.
+Se evita cancelar y reabrir watchDailyControls cuando usuario y fecha son idénticos.
+La suscripción se reemplaza si cambia la fecha o usuario y se libera al cerrar sesión.
+No se modifican escrituras, reglas, consumos, cartas ni lógica de cierre.
+Verificación: sintaxis JS; pruebas de Firebase y regresión entre equipos pendientes.

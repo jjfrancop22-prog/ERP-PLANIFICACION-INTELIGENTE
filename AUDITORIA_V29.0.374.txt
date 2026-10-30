@@ -1,0 +1,7 @@
+V29.0.374 OPTIMIZACION CONSERVADORA
+Base: V29.0.373.
+Cambio: eliminado el doble refresco de 36 documentos que se programaba a los 1.8 y 4.5 segundos al hacer clic en botones Registrar del panel de cartas de Mi Jornada.
+Se mantienen listeners onSnapshot, refresco por foco y todas las escrituras.
+Reduccion teorica: hasta 72 lecturas de documento por clic afectado; depende de la cache y la facturacion efectiva.
+No se alteraron reglas Firestore ni consumo de reactivos.
+Validar en dos equipos antes de publicar.

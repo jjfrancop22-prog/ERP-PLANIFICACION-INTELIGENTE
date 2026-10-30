@@ -1,0 +1,7 @@
+V29.0.377 — OPTIMIZACIÓN CONSERVADORA INICIO JEFE
+
+Cambio verificado: watchDailyControls se suscribía globalmente en el arranque, incluso con las dos sesiones JEFE detenidas en Inicio. Ahora solo se inicia al entrar a Mi Jornada o Cartas de Control, y se cierra al salir. Se preservan los listeners de planes, comunicaciones, notificaciones y demás sincronización global.
+
+No se ha reducido ni limitado la escucha de conversaciones abiertas: hacerlo podría ocultar avisos nuevos. Las 166 suscripciones y 11k lecturas no pueden atribuirse exclusivamente a este listener. Comparar métricas en ventanas equivalentes y observar en dos sesiones JEFE.
+
+Sin cambios en Firestore, reglas, datos, escrituras ni esquema.

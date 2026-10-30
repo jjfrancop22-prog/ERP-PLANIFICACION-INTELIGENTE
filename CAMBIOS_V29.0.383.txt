@@ -1,0 +1,8 @@
+V29.0.383 — paquete limpio para GitHub / Netlify
+Base: V29.0.382.
+- Se conserva el código de aplicación y las correcciones EI-306 existentes.
+- firestore.rules incluye permisos restringidos para incubator306DigitalCorrections y incubator306DigitalAudits.
+- Archivos en raíz del ZIP para subir directamente a GitHub.
+- Versiones de aplicación alineadas a 29.0.383.
+IMPORTANTE: Netlify NO publica reglas de Firestore. Publicar firestore.rules aparte desde Firebase Console o Firebase CLI.
+- No se ha probado contra la base Firebase de producción.

@@ -845,6 +845,40 @@ service cloud.firestore {
       && request.resource.data.revision == resource.data.get('revision',0) + 1;
     allow delete: if false;
   }
+  // Revisiones auditadas de EI-306: no se modifica el control digital original.
+  match /incubator306DigitalCorrections/{recordId} {
+    allow read: if active();
+    allow create, update: if boss()
+      && exists(/databases/$(database)/documents/incubator306Records/$(recordId))
+      && request.resource.data.keys().hasOnly(['cardId','date','pattern','patternCorrected','patternCorrection','conforms','status','auditRevision','reason','correctedBy','correctedAt'])
+      && request.resource.data.cardId == 'INCUBATOR-EI306'
+      && recordId == request.resource.data.date + '_INCUBATOR-EI306'
+      && request.resource.data.pattern is number
+      && request.resource.data.patternCorrection == get(/databases/$(database)/documents/incubator306Records/$(recordId)).data.patternCorrection
+      && request.resource.data.patternCorrected is number
+      && request.resource.data.patternCorrected - (request.resource.data.pattern + request.resource.data.patternCorrection) <= 0.000001
+      && (request.resource.data.pattern + request.resource.data.patternCorrection) - request.resource.data.patternCorrected <= 0.000001
+      && request.resource.data.conforms == (request.resource.data.patternCorrected >= get(/databases/$(database)/documents/incubator306Records/$(recordId)).data.min && request.resource.data.patternCorrected <= get(/databases/$(database)/documents/incubator306Records/$(recordId)).data.max)
+      && request.resource.data.status == (request.resource.data.conforms ? 'COMPLETADA' : 'NO_CONFORME')
+      && request.resource.data.auditRevision == (resource == null ? 1 : resource.data.auditRevision + 1)
+      && request.resource.data.reason is string && request.resource.data.reason.size() >= 10
+      && request.resource.data.correctedBy == request.auth.uid
+      && request.resource.data.correctedAt == request.time
+      && getAfter(/databases/$(database)/documents/incubator306DigitalAudits/$(recordId+'_r'+string(request.resource.data.auditRevision))).data.revision == request.resource.data.auditRevision;
+    allow delete: if false;
+  }
+  match /incubator306DigitalAudits/{auditId} {
+    allow read: if boss();
+    allow create: if boss()
+      && request.resource.data.recordId is string
+      && auditId == request.resource.data.recordId+'_r'+string(request.resource.data.revision)
+      && request.resource.data.before is map && request.resource.data.after is map
+      && request.resource.data.reason is string && request.resource.data.reason.size() >= 10
+      && request.resource.data.correctedBy == request.auth.uid
+      && request.resource.data.correctedAt == request.time
+      && getAfter(/databases/$(database)/documents/incubator306DigitalCorrections/$(request.resource.data.recordId)).data.auditRevision == request.resource.data.revision;
+    allow update, delete: if false;
+  }
   match /incubator306Records/{recordId} {
     allow read: if active();
     allow create: if active()
