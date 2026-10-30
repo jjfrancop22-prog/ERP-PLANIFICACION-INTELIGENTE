@@ -541,20 +541,6 @@ service cloud.firestore {
       && request.resource.data.notes.size()<=500
       && (request.resource.data.kind!='AJUSTE' || (boss() && request.resource.data.notes.size()>=8))
       && request.resource.data.createdAt==request.time
-      && (request.resource.data.kind!='AJUSTE' || !('correction' in request.resource.data.measurement) || (
-        request.resource.data.measurement.correction is map
-        && request.resource.data.measurement.correction.keys().hasOnly(['registered','actual','sourceMovementIds','reason'])
-        && request.resource.data.measurement.correction.reason=='ERROR_REGISTRO'
-        && request.resource.data.measurement.correction.registered is number
-        && request.resource.data.measurement.correction.actual is number
-        && request.resource.data.measurement.correction.actual>=0
-        && request.resource.data.measurement.correction.registered>request.resource.data.measurement.correction.actual
-        && request.resource.data.measurement.correction.sourceMovementIds is list
-        && request.resource.data.measurement.correction.sourceMovementIds.size()>=1
-        && request.resource.data.measurement.correction.sourceMovementIds.size()<=5
-        && closeNumber(request.resource.data.quantity,request.resource.data.measurement.correction.registered-request.resource.data.measurement.correction.actual)
-        && request.resource.data.stockAfter>request.resource.data.stockBefore
-      ))
       && get(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockBefore
       && getAfter(/databases/$(database)/documents/reagents/$(id)).data.stock==request.resource.data.stockAfter
       && getAfter(/databases/$(database)/documents/reagents/$(id)).data.version==request.resource.data.version
