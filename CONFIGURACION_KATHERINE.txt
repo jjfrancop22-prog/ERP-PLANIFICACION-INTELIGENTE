@@ -1,0 +1,5 @@
+V29.0.384 - Configuración requerida en Firebase Firestore
+En users/{UID_REAL_DE_KATHERINE} mantener role: JEFE y status: ACTIVO. Añadir campo booleano analistaExtraordinario: true. No crear otro usuario.
+Publicar firestore.rules de este ZIP antes de probar.
+Katherine aparece como seleccionable, mantiene JEFE, puede ejecutar únicamente sus actividades asignadas. Sus consumos permanecen auditados.
+ATENCIÓN: no se han realizado pruebas integradas contra Firebase real. Probar primero en entorno controlado y verificar permisos, inventario y cierre.

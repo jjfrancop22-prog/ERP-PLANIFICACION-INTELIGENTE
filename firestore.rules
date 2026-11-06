@@ -5,6 +5,9 @@ service cloud.firestore {
   function profile(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
   function active(){return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && profile().data.status == 'ACTIVO';}
   function boss(){return active() && profile().data.role == 'JEFE';}
+  function extraordinary(){return boss() && profile().data.get('analistaExtraordinario',false)==true;}
+  function canExecute(){return active() && (profile().data.role=='ANALISTA' || extraordinary());}
+  function assignable(uid){return exists(/databases/$(database)/documents/users/$(uid)) && get(/databases/$(database)/documents/users/$(uid)).data.status=='ACTIVO' && (get(/databases/$(database)/documents/users/$(uid)).data.role=='ANALISTA' || (get(/databases/$(database)/documents/users/$(uid)).data.role=='JEFE' && get(/databases/$(database)/documents/users/$(uid)).data.get('analistaExtraordinario',false)==true));}
   match /users/{uid} {
    allow get: if signedIn() && (request.auth.uid == uid || boss());
    allow list: if boss();
@@ -401,7 +404,7 @@ service cloud.firestore {
 
   // V29.0.43: el movimiento de analista requiere actividad abierta y asiento vinculado.
   function journeyEntry(op){return getAfter(/databases/$(database)/documents/journeyConsumptions/$(op));}
-  function journeyOwner(op){return active() && profile().data.role=='ANALISTA'
+  function journeyOwner(op){return active() && canExecute()
    && journeyEntry(op).data.uid==request.auth.uid
    && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.analystId==request.auth.uid
    && get(/databases/$(database)/documents/plannerAssignments/$(journeyEntry(op).data.planId)).data.status=='EN_PROCESO';}
@@ -551,9 +554,9 @@ service cloud.firestore {
   // Registro inmutable de cada descuento, visible únicamente a su analista y JEFE.
   match /journeyConsumptions/{op} {
    allow get: if boss() || (active() && (!exists(/databases/$(database)/documents/journeyConsumptions/$(op)) || resource.data.uid==request.auth.uid));
-   allow list: if boss() || (active() && profile().data.role=='ANALISTA' && resource.data.uid==request.auth.uid && request.query.limit!=null && request.query.limit<=100);
+   allow list: if boss() || (active() && canExecute() && resource.data.uid==request.auth.uid && request.query.limit!=null && request.query.limit<=100);
    allow update,delete: if false;
-   allow create: if active() && profile().data.role=='ANALISTA'
+   allow create: if active() && canExecute()
     && request.resource.data.keys().hasOnly(['id','planId','reagentId','uid','quantity','unit','control','stockBefore','stockAfter','measurement','notes','createdAt'])
     && request.resource.data.keys().hasAll(['id','planId','reagentId','uid','quantity','unit','control','stockBefore','stockAfter','measurement','notes','createdAt'])
     && request.resource.data.id==op && request.resource.data.uid==request.auth.uid
@@ -573,7 +576,7 @@ service cloud.firestore {
    allow read: if boss();
    allow create, update: if boss()
     && exists(/databases/$(database)/documents/users/$(uid))
-    && get(/databases/$(database)/documents/users/$(uid)).data.role == 'ANALISTA'
+    && (get(/databases/$(database)/documents/users/$(uid)).data.role == 'ANALISTA' || (get(/databases/$(database)/documents/users/$(uid)).data.role == 'JEFE' && get(/databases/$(database)/documents/users/$(uid)).data.get('analistaExtraordinario',false)==true))
     && request.resource.data.keys().hasOnly(['areas','activityIds','updatedBy','updatedAt'])
     && request.resource.data.keys().hasAll(['areas','updatedBy','updatedAt'])
     && request.resource.data.get('activityIds',[]) is list
@@ -587,7 +590,7 @@ service cloud.firestore {
   }
   // Asignaciones del planificador. Solo JEFE crea, reasigna o cancela.
   match /plannerAssignments/{id} {
-   allow read: if boss() || (active() && profile().data.role == 'ANALISTA' && resource.data.analystId == request.auth.uid);
+   allow read: if boss() || (active() && canExecute() && resource.data.analystId == request.auth.uid);
    function validPlan(){let d=request.resource.data;return d.keys().hasOnly(['date','analystId','analystName','activityId','activityName','area','startMin','endMin','durationMin','timeModel','sampleCount','catalogRevision','catalogTechnicalVersion','notes','status','revision','updatedBy','updatedAt','createdBy','createdAt','startedBy','startedAt','finishedBy','finishedAt','closureControlIds','closureConsumptionId'])
     && d.keys().hasAll(['date','analystId','analystName','activityId','activityName','area','startMin','endMin','durationMin','timeModel','sampleCount','catalogRevision','catalogTechnicalVersion','notes','status','revision','updatedBy','updatedAt','createdBy','createdAt'])
     && d.date is string && d.date.size()==10 && d.analystId is string && d.analystName is string && d.activityId is string && d.activityName is string && d.area is string
@@ -597,7 +600,7 @@ service cloud.firestore {
     && d.status in ['PROGRAMADO','CANCELADO','EN_PROCESO','REALIZADO'] && d.revision is int
     && d.updatedBy==request.auth.uid && d.updatedAt==request.time
     && exists(/databases/$(database)/documents/users/$(d.analystId))
-    && get(/databases/$(database)/documents/users/$(d.analystId)).data.role=='ANALISTA'
+    && assignable(d.analystId)
     && get(/databases/$(database)/documents/users/$(d.analystId)).data.status=='ACTIVO';}
    allow create: if boss() && validPlan() && request.resource.data.status=='PROGRAMADO' && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
    allow update: if boss() && validPlan() && resource.data.status=='PROGRAMADO'
@@ -605,7 +608,7 @@ service cloud.firestore {
     && request.resource.data.createdBy==resource.data.createdBy && request.resource.data.createdAt==resource.data.createdAt
     && (request.resource.data.status=='PROGRAMADO' || (request.resource.data.status=='CANCELADO' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','revision','updatedBy','updatedAt'])));
    // Solo el analista asignado puede abrir su actividad; campos y revisión controlados.
-   allow update: if active() && profile().data.role == 'ANALISTA'
+   allow update: if active() && canExecute()
     && resource.data.analystId == request.auth.uid
     && resource.data.status == 'PROGRAMADO'
     && request.resource.data.status == 'EN_PROCESO'
@@ -639,7 +642,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/journeyConsumptions/$(request.resource.data.closureConsumptionId)).data.planId==id
         && get(/databases/$(database)/documents/journeyConsumptions/$(request.resource.data.closureConsumptionId)).data.uid==request.auth.uid);
    }
-   allow update: if active() && profile().data.role=='ANALISTA'
+   allow update: if active() && canExecute()
     && resource.data.analystId==request.auth.uid
     && resource.data.status=='EN_PROCESO'
     && request.resource.data.status=='REALIZADO'
@@ -1123,7 +1126,7 @@ service cloud.firestore {
   match /setedBottles/{id} {
    allow read: if active();
    allow create: if boss() && request.resource.data.createdBy==request.auth.uid && request.resource.data.revision==1 && request.resource.data.quantity is number && request.resource.data.quantity>=0;
-   allow update: if active() && (boss() || (profile().data.role == 'ANALISTA' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy']) && request.resource.data.lastGross is number && request.resource.data.lastGross <= resource.data.lastGross && request.resource.data.quantity <= resource.data.quantity && resource.data.density is number && resource.data.density > 0 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) < 0.0001 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) > -0.0001)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy','lot','tare','density','initialGross','officialOpening','openingDate','invoice','entryResponsible','entryResponsibleId','entryType','correctionHistory']) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.updatedBy==request.auth.uid && request.resource.data.quantity>=0;
+   allow update: if active() && (boss() || (canExecute() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy']) && request.resource.data.lastGross is number && request.resource.data.lastGross <= resource.data.lastGross && request.resource.data.quantity <= resource.data.quantity && resource.data.density is number && resource.data.density > 0 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) < 0.0001 && (request.resource.data.quantity - (resource.data.quantity - (resource.data.lastGross - request.resource.data.lastGross) / resource.data.density)) > -0.0001)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastGross','quantity','revision','updatedAt','updatedBy','lot','tare','density','initialGross','officialOpening','openingDate','invoice','entryResponsible','entryResponsibleId','entryType','correctionHistory']) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.updatedBy==request.auth.uid && request.resource.data.quantity>=0;
    allow delete: if false;
   }
   match /setedCorrections/{id} {
@@ -1134,7 +1137,7 @@ service cloud.firestore {
   }
   match /setedMovements/{id} {
    allow read: if active();
-   allow create: if active() && (boss() || profile().data.role == 'ANALISTA') && request.resource.data.createdBy==request.auth.uid && request.resource.data.type=='CONSUMO_PESAJE';
+   allow create: if active() && (boss() || canExecute()) && request.resource.data.createdBy==request.auth.uid && request.resource.data.type=='CONSUMO_PESAJE';
    allow update,delete: if false;
   }
   match /{document=**} {allow read,write:if false;}
