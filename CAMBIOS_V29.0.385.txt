@@ -1,0 +1,8 @@
+V29.0.385 — Katherine extraordinaria (versión para pruebas)
+- Acceso a Ensayos Analíticos en el planificador con rol JEFE y analistaExtraordinario=true.
+- Exención de reserva HT obligatoria para la modalidad extraordinaria.
+- Sin jornada nominal de 8 horas; se mantienen restricciones horarias y cruces.
+- Indicadores nominales excluyen la carga extraordinaria.
+- Gestión de competencias disponible también para analistas extraordinarios.
+- Mi Jornada y consumos conservan la implementación de V29.0.384.
+Pendiente: prueba real en Firebase y verificación de reglas y consumos.
