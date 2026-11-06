@@ -1,0 +1,1 @@
+Correccion Netlify: Vite compila correctamente; el despliegue fue bloqueado por deteccion automatica de la clave publica Firebase Web API. Se desactiva solo la deteccion inteligente de secretos de Netlify con SECRETS_SCAN_SMART_DETECTION_ENABLED=false. Mantener las reglas Firebase y las restricciones de API key. No se modifico la logica funcional del ERP.
