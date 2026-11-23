@@ -1,0 +1,1 @@
+V29.0.386: Navegación directa segura desde SGC mediante ?psiCarta=metales|balanza|instrumental|microbiologia. Requiere autenticación y perfil ACTIVO. No comparte Firebase ni credenciales.
