@@ -1,0 +1,1 @@
+V29.0.387: Corrige APP_VERSION visible (antes 29.0.384) y sincroniza version.json y package.json. Conserva navegación ?psiCarta= de V29.0.386. La captura V29.0.384 no confirma que se haya desplegado V29.0.386; publicar y comprobar en Netlify.
