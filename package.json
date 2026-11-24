@@ -1,23 +1,21 @@
 {
-  "name": "psi-sgc-nextgen",
+  "name": "erp-planificacion-nextgen-v29",
+  "version": "29.0.387",
   "private": true,
-  "version": "1.1.75",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "dev:netlify": "netlify dev",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "firebase": "^11.10.0",
-    "lucide-react": "^0.468.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "exceljs": "^4.4.0",
-    "firebase-admin": "^13.4.0"
+    "firebase": "^12.4.0",
+    "lucide": "^0.468.0",
+    "pdfjs-dist": "^4.10.38",
+    "qrcode": "^1.5.4",
+    "jspdf": "^2.5.2"
   },
   "devDependencies": {
-    "vite": "^6.3.5"
+    "vite": "^7.1.9"
   }
 }

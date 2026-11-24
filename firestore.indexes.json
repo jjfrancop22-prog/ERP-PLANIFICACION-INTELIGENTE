@@ -1,62 +1,16 @@
 {
   "indexes": [
     {
-      "collectionGroup": "notifications",
+      "collectionGroup": "journeyConsumptions",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "recipientId",
+          "fieldPath": "uid",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "status",
+          "fieldPath": "planId",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "sgcDocuments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "requirementId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "sgcRecords",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "requirementId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "sgcRequirementEvaluations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "requirementId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
         }
       ]
     }
