@@ -1,0 +1,7 @@
+rules_version = '2';
+service firebase.storage {
+ match /b/{bucket}/o {
+  // V1.0.0: la gestión documental binaria no está habilitada.
+  match /{allPaths=**} { allow read,write: if false; }
+ }
+}

@@ -1,0 +1,45 @@
+import {collection,doc,query,where,limit,getDocs,getDoc,setDoc,updateDoc,serverTimestamp,runTransaction} from 'firebase/firestore';
+import {db} from './firebase';
+const base='sgcRiskAssessments';
+const localToday=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+export const riskLevel=(p,i)=>{const n=Number(p)*Number(i);return n>=30?'GRAVE':n>=15?'MODERADO':n>=5?'BAJO':'SIN VALORAR'};
+export const frequency=level=>({GRAVE:3,MODERADO:6,BAJO:12,ALTA:3,MEDIA:6,BAJA:12})[level]||null;
+export const reviewLevel=d=>d.kind==='OPORTUNIDAD'?d.priority:d.level;
+export const nextReview=(date,level)=>{if(!date||!frequency(level))return '';const [y,m,day]=date.split('-').map(Number);const months=frequency(level);const target=new Date(Date.UTC(y,m-1+months,1));const last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();target.setUTCDate(Math.min(day,last));return target.toISOString().slice(0,10)};
+export async function listAssessments(){const snap=await getDocs(query(collection(db,base),limit(100)));return snap.docs.map(d=>({id:d.id,...d.data()}))}
+export async function listApprovedIdentifications(){const snap=await getDocs(query(collection(db,'sgcRiskIdentifications'),where('status','==','LINKED'),limit(100)));return snap.docs.map(d=>({id:d.id,...d.data()}))}
+export async function saveAssessment(record,user){const id=record.sourceId;if(!id)throw Error('Falta identificación MC1101');const ref=doc(db,base,id);const original=await getDoc(doc(db,'sgcRiskIdentifications',id));if(!original.exists()||original.data().status!=='LINKED')throw Error('La identificación no está aprobada por Calidad');const old=await getDoc(ref);const prior=old.exists()?old.data():{};const kind=original.data().kind;const level=kind==='RIESGO'?riskLevel(record.probability,record.impact):'';if(kind==='RIESGO'&&level==='SIN VALORAR')throw Error('Seleccione probabilidad e impacto');if(kind==='OPORTUNIDAD'&&!record.priority)throw Error('Seleccione prioridad de oportunidad');const now=new Date().toISOString();const entry={at:now,by:user.displayName||user.email||user.uid,type:'VALORACION',note:'Valoración y plan actualizados'};const {lastReviewAt:ignoredHistoricalDate,...safeRecord}=record;const documentedDate=(prior.followups||[]).length?prior.lastReviewAt||'':'';const data={...prior,...safeRecord,createdBy:prior.createdBy||user.uid,status:prior.status&&prior.status!=='POR_VALORAR'?prior.status:'EN_TRATAMIENTO',lastReviewAt:documentedDate,sourceId:id,kind,description:original.data().description,process:original.data().process,source:original.data().source,level,score:kind==='RIESGO'?Number(record.probability)*Number(record.impact):null,frequencyMonths:frequency(kind==='OPORTUNIDAD'?record.priority:level),nextReviewAt:documentedDate?nextReview(documentedDate,kind==='OPORTUNIDAD'?record.priority:level):'',updatedAt:serverTimestamp(),updatedBy:user.uid,updatedByName:entry.by,createdAt:prior.createdAt||serverTimestamp(),history:[...(prior.history||[]),entry]};await setDoc(ref,data);return id}
+export async function addFollowup(id,entry,user){const ref=doc(db,base,id);await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error('Expediente no encontrado');const d=snap.data();if(!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)||entry.date>localToday())throw Error('La revisión debe tener una fecha válida y no futura');if(!entry.result?.trim()||!entry.evidence?.trim())throw Error('Registre resultado y evidencia');if(d.lastReviewAt&&(d.followups||[]).length&&entry.date<d.lastReviewAt)throw Error('No puede registrar una revisión anterior a la última; documente las revisiones históricas por separado');const now=new Date().toISOString();const item={...entry,at:now,by:user.displayName||user.email||user.uid};const level=reviewLevel(d);const existing=d.followups||[];if(existing.some(x=>x.date===entry.date&&x.result?.trim()===entry.result.trim()&&x.evidence?.trim()===entry.evidence.trim()))throw Error('Este seguimiento ya está registrado; no se creó un duplicado');tx.update(ref,{followups:[...existing,item],lastReviewAt:entry.date,nextReviewAt:nextReview(entry.date,level),frequencyMonths:frequency(level),history:[...(d.history||[]),{type:'SEGUIMIENTO',at:now,by:item.by,note:entry.result}],updatedAt:serverTimestamp(),updatedBy:user.uid})})}
+export async function evaluateEffectiveness(id,entry,user){const ref=doc(db,base,id);await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error('Expediente no encontrado');const d=snap.data();if(d.status==='CERRADO')throw Error('El expediente está cerrado; requiere reapertura controlada antes de modificar la eficacia');if(!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)||entry.date>localToday())throw Error('Indique la fecha real de evaluación, no futura');if(!['EFICAZ','PARCIAL','NO_EFICAZ'].includes(entry.result)||!entry.evidence?.trim()||!entry.note?.trim())throw Error('Complete resultado, evidencia y conclusión técnica');const now=new Date().toISOString();const by=user.displayName||user.email||user.uid;tx.update(ref,{effectiveness:{...entry,at:now,by},status:entry.result==='EFICAZ'?'EFICACIA_VERIFICADA':'EN_SEGUIMIENTO',history:[...(d.history||[]),{type:'EFICACIA',at:now,by,note:entry.result}],updatedAt:serverTimestamp(),updatedBy:user.uid})})}
+export async function closeAssessment(id,note,user,manager){const ref=doc(db,base,id);await runTransaction(db,async tx=>{const snap=await tx.get(ref);if(!snap.exists())throw Error('Expediente no encontrado');const d=snap.data();if(d.status==='CERRADO')throw Error('Este tratamiento ya está cerrado; no registre otro cierre');if(d.effectiveness?.result!=='EFICAZ'||!d.effectiveness?.evidence)throw Error('Se requiere eficacia verificada y evidencia objetiva');if(!note.trim())throw Error('Justifique el cierre');if((d.level==='GRAVE'||d.critical===true)&&!manager)throw Error('El cierre crítico requiere aprobación del Gerente de Laboratorio');const at=new Date().toISOString();const by=user.displayName||user.email||user.uid;tx.update(ref,{status:'CERRADO',closure:{note,at,by,uid:user.uid},history:[...(d.history||[]),{type:'CIERRE',at,by,note}],updatedAt:serverTimestamp(),updatedBy:user.uid})})}
+
+// 8.5.3: evaluación independiente, auditable y sin duplicar la matriz.
+export async function evaluateProportionality(id,entry,user){
+ const ref=doc(db,base,id);
+ await runTransaction(db,async tx=>{
+  const snap=await tx.get(ref);if(!snap.exists())throw Error('Primero guarde la valoración y el plan en MC1102');
+  const d=snap.data();
+  if(!['PROPORCIONAL','FORTALECER','PENDIENTE'].includes(entry.result))throw Error('Seleccione una conclusión');
+  if(!entry.impactOnResults?.trim()||!entry.justification?.trim())throw Error('Describa el impacto sobre la validez y justifique la conclusión');
+  if(!d.action?.trim())throw Error('Registre primero el tratamiento en MC1102');
+  const now=new Date().toISOString(),by=user.displayName||user.email||user.uid;
+  const item={result:entry.result,impactOnResults:entry.impactOnResults.trim(),justification:entry.justification.trim(),at:now,date:localToday(),by,uid:user.uid,actionSnapshot:d.action,levelSnapshot:d.level||d.priority||'',kind:d.kind};
+  tx.update(ref,{proportionality:item,proportionalityHistory:[...(d.proportionalityHistory||[]),item],history:[...(d.history||[]),{type:'PROPORCIONALIDAD',at:now,by,note:entry.result+' · '+entry.justification.trim()}],updatedAt:serverTimestamp(),updatedBy:user.uid});
+ });
+}
+
+// 4.1.5: verificación vinculada al mismo expediente; no crea una matriz adicional.
+export async function verifyImpartialityControl(id,entry,user){
+ if(!user?.uid)throw Error('Se requiere sesión autorizada');
+ if(!['CONTROLADO','FORTALECER','PENDIENTE'].includes(entry.result)||!entry.evidence?.trim()||!entry.note?.trim())throw Error('Complete conclusión, evidencia y justificación');
+ const ref=doc(db,base,id);
+ await runTransaction(db,async tx=>{
+  const snap=await tx.get(ref);if(!snap.exists())throw Error('Expediente MC1102 no encontrado');
+  const d=snap.data();if(d.kind!=='RIESGO'||!d.action?.trim())throw Error('Se requiere un riesgo con tratamiento registrado en MC1102');
+  const now=new Date().toISOString(),by=user.displayName||user.email||user.uid;
+  const item={result:entry.result,evidence:entry.evidence.trim(),note:entry.note.trim(),at:now,date:localToday(),by,uid:user.uid,actionSnapshot:d.action};
+  const prior=d.impartialityControlHistory||[];
+  if(prior.length&&prior[prior.length-1].result===item.result&&prior[prior.length-1].evidence===item.evidence&&prior[prior.length-1].note===item.note&&prior[prior.length-1].actionSnapshot===item.actionSnapshot)throw Error('Esta verificación ya está registrada; no se duplicó');
+  tx.update(ref,{impartialityControl:item,impartialityControlHistory:[...prior,item],history:[...(d.history||[]),{type:'IMPARCIALIDAD_415',at:now,by,note:item.result+' · '+item.note}],updatedAt:serverTimestamp(),updatedBy:user.uid});
+ });
+}

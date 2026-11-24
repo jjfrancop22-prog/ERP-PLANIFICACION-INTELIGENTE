@@ -1,0 +1,143 @@
+.psi5{display:grid;gap:16px}.psi5Tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;padding:8px;background:#e8f2fa;border-radius:14px}.psi5Tabs button{min-width:0;border:0;border-radius:10px;background:transparent;color:#426887;padding:13px 5px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;font:inherit;text-align:center}.psi5Tabs button b{font-size:17px}.psi5Tabs button span{font-size:12px;font-weight:650}.psi5Tabs button small{font-size:10px;border-radius:20px;background:#d6e7f5;padding:2px 7px}.psi5Tabs button.selected{background:#1b6699;color:#fff;box-shadow:0 2px 6px #164f772b}.psi5Tabs button.selected small{background:#ffffff29;color:#fff}.psi5Quick{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;margin-top:14px;border:1px solid #d6e5f1;border-radius:12px;background:#f7fbfe}.psi5Quick p{margin:5px 0 0;color:#57738b;font-size:13px}.psi5Quick>div:last-child{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:1100px){.psi5Tabs{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:650px){.psi5Tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.psi5Quick{display:block}.psi5Quick>div:last-child{margin-top:12px}}
+
+/* Expediente legal 5.1: vista compacta sobre la Biblioteca existente */
+.psi5Legal{border:1px solid #d8e4eb;border-radius:14px;background:white;overflow:hidden}.psi5LegalTop{display:flex;justify-content:space-between;align-items:center;gap:14px;background:#f0f7f5;padding:16px 18px}.psi5LegalTop h4,.psi5LegalHeading h4{margin:4px 0 6px;color:#183047}.psi5LegalTop p,.psi5LegalHeading p{margin:0;color:#587084;font-size:13px}.psi5LegalHeading{padding:15px 18px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.psi5LegalButtons{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.psi5LegalButtons button{padding:7px 10px;font-size:12px}.psi5Pill{display:inline-block;background:#dff3e7;color:#19663e;border-radius:20px;padding:4px 9px;font-size:11px;font-weight:750;white-space:nowrap}.psi5Pill.pending{background:#f1f4f7;color:#657587}.psi5LegalTable{margin:0 14px 12px;border:1px solid #e2eaf0;border-radius:10px;overflow:hidden}.psi5LegalTH,.psi5LegalRow{display:grid;grid-template-columns:1.25fr 1.7fr 1fr .65fr;gap:12px;align-items:center;padding:11px 13px}.psi5LegalTH{background:#f5f8fb;color:#52677b;font-size:12px;font-weight:700}.psi5LegalRow{border-top:1px solid #e7edf2;font-size:13px}.psi5LegalRow strong{display:block;color:#182c41}.psi5LegalRow small{display:block;color:#617589;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.psi5LegalRow p{margin:0;color:#435c70}.psi5LegalFoot{margin:0;padding:0 18px 15px;font-size:12px;color:#65798b}@media(max-width:760px){.psi5LegalTop{align-items:flex-start;flex-direction:column}.psi5LegalTH{display:none}.psi5LegalRow{grid-template-columns:1fr 1fr}.psi5LegalRow p{grid-column:1/-1}}
+
+/* 5.2: dirección y organigrama, sin expediente duplicado */
+.psi52Body{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}.psi52Card{border:1px solid #dce8ef;border-radius:12px;padding:16px;background:#fff}.psi52Card h4{margin:7px 0;color:#17324a;font-size:18px}.psi52Card p{color:#506a80;font-size:13px;line-height:1.6;margin:0 0 12px}.psi52Facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.psi52Facts>div{padding:10px;background:#f3f8fb;border-radius:8px}.psi52Facts small,.psi52Facts strong{display:block}.psi52Facts small,.psi52Hint{font-size:11px;color:#688096}.psi52Facts strong{font-size:13px;color:#23445d;margin-top:4px}.psi52Foot{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #e6edf2;padding-top:12px;font-size:12px;color:#60798e}.psi52Hint{display:block;margin-top:13px;line-height:1.55}@media(max-width:800px){.psi52Body{grid-template-columns:1fr}}
+/* 5.3 · actividades y alcance */
+.psi53Grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px}.psi53Card{border:1px solid #d6e4ed;border-radius:14px;padding:18px;background:#fff}.psi53Card h4{margin:8px 0;font-size:19px;color:#18334d}.psi53Card p{margin:5px 0 12px;color:#52708b;line-height:1.55}.psi53Area{padding:0 16px 16px}.psi53Area h4{margin:6px 0 12px;color:#19354e}.psi53Table{width:100%;border-collapse:collapse;font-size:14px}.psi53Table th,.psi53Table td{padding:12px;text-align:left;border-bottom:1px solid #e1eaf0}.psi53Table th{background:#f2f7fa;color:#4a657e}.psi53Tag{display:inline-block;border-radius:8px;padding:5px 9px;background:#edf4f8;color:#235c7f;font-weight:650}.psi53Notice{margin:0 16px 16px;padding:13px 16px;border:1px solid #d9e6ee;background:#f5f9fc;border-radius:10px;color:#4c6680;line-height:1.55}.psi53Types{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.psi53Types span{padding:7px 10px;border-radius:8px;background:#eef4f8;font-size:13px;color:#255b79}@media(max-width:800px){.psi53Grid{grid-template-columns:1fr}.psi53Table{font-size:12px}}
+
+.psi53Evidence{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #dce8ef;flex-wrap:wrap}.psi53Evidence>div:first-child{display:flex;flex-direction:column;align-items:flex-start;gap:5px}.psi53Evidence small{color:#58718a}.psi53Evidence .psi5LegalButtons{display:flex;flex-wrap:wrap;gap:6px}
+
+.psi55Grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px 16px 0}.psi55Grid .psi52Card{min-width:0}.psi55Lower{padding-top:14px}.psi55Link{display:inline-flex;align-items:center;padding:8px 11px;border-radius:9px;background:#e5f1fa;color:#17608e;font-size:12px;font-weight:750;text-decoration:none}.psi55Support{display:grid;gap:0;margin:10px 0}.psi55Support>div{display:grid;grid-template-columns:115px 1fr;gap:12px;border-bottom:1px solid #e8eef2;padding:9px 0;font-size:12px}.psi55Support strong{color:#17344f}.psi55Support span{color:#526b7e}.psi55Footer{margin:15px 16px 0;padding:12px 14px;background:#f2f7fa;border-radius:10px;color:#426178;font-size:12px;line-height:1.6}.psi55Footer span{display:block}.psi55Next{display:flex;gap:10px;flex-wrap:wrap;margin:12px 16px 16px}.psi55Next span{border:1px solid #e1eaf0;background:#fafcfd;padding:8px 11px;border-radius:9px;color:#667e90;font-size:12px}@media(max-width:800px){.psi55Grid{grid-template-columns:1fr}}
+.psi55Upload{display:inline-flex;align-items:center;padding:9px 13px;border-radius:9px;background:#e3f0fa;color:#196395;font-weight:700;cursor:pointer;font-size:14px}.psi55Upload:has(input:disabled){opacity:.55;cursor:wait}.psi55Error{color:#a32121;font-weight:600}
+
+/* 5.5 b · consulta vinculada a Personal 6.2 */
+.psi55b{margin:16px;border:1px solid #d9e6ef;border-radius:13px;background:#fff;overflow:hidden}.psi55bHead{padding:17px 19px;background:#eef6f4;display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.psi55bHead h4{margin:7px 0;font-size:19px;color:#19354d}.psi55bHead p{margin:0;color:#536e83;font-size:13px;line-height:1.5}.psi55bRefs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:15px}.psi55bRefs>div{border:1px solid #dce8ef;border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}.psi55bRefs strong{font-size:13px;color:#1b3953}.psi55bRefs small{color:#637f93;font-size:12px;min-height:30px}.psi55bTableHead{padding:5px 15px 12px;display:flex;justify-content:space-between;gap:12px;align-items:center}.psi55bTableHead strong,.psi55bTableHead small{display:block}.psi55bTableHead small{font-size:12px;color:#637d91}.psi55bTableHead input{max-width:240px;padding:9px;border:1px solid #d6e4ed;border-radius:8px}.psi55bScroll{overflow-x:auto;padding:0 15px}.psi55bScroll table{min-width:720px}.psi55bScroll td{font-size:12px}.psi55bFoot{margin:12px 15px 15px;padding:12px;background:#f3f8fb;border-radius:9px;color:#526d82;font-size:12px;line-height:1.6}.psi55bWarning{margin:0 15px 12px;color:#a12d2d;font-size:12px}@media(max-width:800px){.psi55bRefs{grid-template-columns:1fr}.psi55bHead{flex-direction:column}.psi55bTableHead{flex-direction:column;align-items:stretch}.psi55bTableHead input{max-width:none}}
+
+/* Requisito 5.5 c) · consulta compacta */
+.psi55c{margin-top:16px;border:1px solid #dce6ee;border-radius:12px;padding:16px;background:#fff}
+.psi55cStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0}
+.psi55cStats>div{border:1px solid #e2e9f0;border-radius:9px;padding:10px;background:#f8fafc;display:flex;flex-direction:column;gap:3px}
+.psi55cStats strong{font-size:20px;color:#16364b}.psi55cStats small{color:#526578}
+.psi55cControls{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin:12px 0}
+.psi55cCategories{display:flex;flex-wrap:wrap;gap:6px}.psi55cCategories button{border:1px solid #cbd8e2;border-radius:7px;background:white;padding:7px 10px;color:#27475a;cursor:pointer;font-size:12px}.psi55cCategories button.selected{background:#e3f1ed;border-color:#579888;color:#165c4d;font-weight:700}
+.psi55cFilters{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.psi55cFilters>input{max-width:250px;padding:8px;border:1px solid #ccd8e2;border-radius:7px}.psi55cFilters label{display:flex;align-items:center;gap:5px;font-size:12px}.psi55cLinked{display:block;color:#356b64;margin-top:4px}
+@media(max-width:720px){.psi55cStats{grid-template-columns:1fr}.psi55c{padding:10px}}
+
+/* V1.1.35: filtros de catálogo documental 5.5 c) */
+.psi55cFilters select{padding:8px;border:1px solid #ccd8e2;border-radius:7px;background:#fff;color:#27475a;max-width:190px}.psi55cFilters label{white-space:nowrap}.psi55c .psi53Table td{vertical-align:middle}.psi55c .psi53Table td strong{color:#1b3953}@media(max-width:760px){.psi55cFilters{width:100%}.psi55cFilters>input{max-width:none;width:100%}}
+
+/* V1.1.38 · catálogo compacto y paginado */
+.psi55c .psi53Table th,.psi55c .psi53Table td{padding:8px 10px;font-size:12px;line-height:1.3}
+.psi55c .psi53Table td button{padding:6px 10px;font-size:12px;white-space:nowrap}
+.psi55c .psi53Table td .psi5Pill{font-size:10px;padding:3px 7px}
+.psi55cPagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:12px;color:#526578;font-size:12px}
+.psi55cPagination label,.psi55cPageButtons{display:flex;align-items:center;gap:8px}
+.psi55cPagination select{padding:5px;border:1px solid #cbd8e2;border-radius:6px;background:#fff}
+.psi55cPageButtons button{padding:6px 10px;font-size:12px}
+.psi55cPageButtons button:disabled{opacity:.45;cursor:not-allowed}
+
+/* V1.1.39 · Requisito 5.4 */
+.psi54{display:grid;gap:14px;margin:14px 0}.psi54Intro{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;background:#edf5f3;border-radius:12px;padding:18px 20px}.psi54Intro h4{margin:5px 0;font-size:20px;color:#173b53}.psi54Intro p{margin:0;color:#587287;font-size:13px}.psi54Cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.psi54Cards article,.psi54Panel{border:1px solid #dce7ed;border-radius:12px;padding:14px;background:#fff}.psi54Cards article{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.psi54Cards strong,.psi54Panel strong{font-size:14px;color:#193d55}.psi54Cards small,.psi54Panel small,.psi54Muted{font-size:12px;color:#617a8e}.psi54Cards button{margin-top:auto}.psi54PanelTitle{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.psi54Grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.psi54Area{background:#f3f7fa;border-radius:9px;padding:11px;display:flex;flex-direction:column;gap:4px}.psi54Area span{font-weight:600;font-size:13px}.psi54Split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.psi54Split p{font-size:13px;color:#506c80;line-height:1.5}.psi54Requirements{display:grid;gap:6px;margin-top:10px}.psi54Requirements div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #e9eef2;padding:5px 0;font-size:12px}.psi54Requirements span{color:#617a8e;text-align:right}.psi54Note{background:#f2f7fa;padding:12px 14px;border-radius:10px;font-size:12px;line-height:1.5;color:#4b687d}@media(max-width:800px){.psi54Cards,.psi54Split{grid-template-columns:1fr}.psi54Grid{grid-template-columns:repeat(2,minmax(0,1fr))}} 
+
+.psi54External,.psi54AreaLink{display:inline-flex;align-items:center;text-decoration:none;background:#e5f1f9;color:#176393;font-size:12px;font-weight:700;border-radius:8px;padding:8px 10px}.psi54AreaLink{margin-top:5px;align-self:flex-start}.psi54Config{width:100%;display:grid;gap:7px;background:#f4f8fa;border:1px solid #d9e6ec;border-radius:9px;padding:9px}.psi54Config label{font-size:12px;color:#39566a}.psi54Config input{display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid #cbdce5;border-radius:7px}.psi54Cards .psi5LegalButtons{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.psi54Cards .psi5LegalButtons button{margin:0}
+
+/* V1.1.47 · 5.6: mismo lenguaje visual del capítulo 5 */
+.psi56{display:grid;gap:13px;margin:14px 0}.psi56Intro{background:#edf5f3;border-radius:12px;padding:18px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.psi56Intro h4{margin:6px 0;font-size:20px;color:#173b53}.psi56Intro p{margin:0;color:#587287;font-size:13px;line-height:1.5}.psi56Sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.psi56Sources article{border:1px solid #dce7ed;border-radius:12px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:9px}.psi56Sources strong{color:#193d55;font-size:14px}.psi56Sources small,.psi56Row small,.psi56ListHead small,.psi56Detail small{color:#617a8e;font-size:12px}.psi56Sources .psi5LegalButtons{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:auto}.psi56List{border:1px solid #dce7ed;border-radius:12px;overflow:hidden;background:#fff}.psi56ListHead{padding:14px 16px;background:#f2f7fa;display:flex;justify-content:space-between;gap:10px}.psi56ListHead strong{color:#193d55}.psi56Row{border-top:1px solid #e6edf2}.psi56RowTop{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}.psi56RowTop>div:first-child{display:grid;gap:5px}.psi56RowTop b{color:#173b53;font-size:13px}.psi56RowActions{display:flex;align-items:center;gap:8px;flex-shrink:0}.psi56Detail{background:#f8fbfd;border-top:1px solid #e6edf2;padding:13px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.psi56Detail strong{font-size:12px;color:#193d55}.psi56Detail p{margin:6px 0;font-size:13px;color:#3c5d72}.psi56DetailActions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}@media(max-width:800px){.psi56Sources,.psi56Detail{grid-template-columns:1fr}.psi56Intro,.psi56RowTop,.psi56ListHead{flex-direction:column;align-items:flex-start}.psi56RowActions{flex-wrap:wrap}}
+/* V1.1.49 · 5.7: conexiones futuras, sin duplicar expedientes */
+.psi57Connections{display:grid;gap:9px;margin:12px 0 16px}
+.psi57Connections article{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border:1px solid #dce8f0;border-radius:12px;padding:13px 15px;background:#fff}
+.psi57Connections article strong,.psi57Connections article small{display:block}
+.psi57Connections article small{color:#637e91;margin-top:3px}
+.psi57Connections article p{margin:7px 0 0;color:#476478;line-height:1.45}
+.psi57Connections .psi5Pill{flex-shrink:0}
+@media(max-width:700px){.psi57Connections article{flex-direction:column}}
+/* V1.1.61 · control compacto 5.7 b) */
+.psi57bOverlay{position:fixed;inset:0;background:rgba(16,37,56,.65);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
+.psi57bModal{background:#fff;border-radius:17px;max-width:860px;width:100%;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 20px 70px #10253855;color:#193e58}
+.psi57bModal label{font-weight:650;font-size:13px;display:block}
+.psi57bModal input,.psi57bModal select,.psi57bModal textarea{display:block;box-sizing:border-box;width:100%;padding:10px;border:1px solid #c6d9e8;border-radius:8px;margin-top:5px;font:inherit;background:white;color:#17374f}
+.psi57bModal textarea{min-height:65px;resize:vertical}
+.psi57bGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:650px){.psi57bGrid{grid-template-columns:1fr}.psi57bModal{padding:15px}}
+
+/* V1.1.66 · Capítulo 5: evidencias reutilizables en panel compacto ELISA */
+.psi5EvidenceFold{margin-top:14px;overflow:hidden}
+.psi5EvidenceSummary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:15px 18px;cursor:pointer;list-style:none;color:#173d54;background:#f2f7f9;border-radius:12px}
+.psi5EvidenceSummary::-webkit-details-marker{display:none}
+.psi5EvidenceSummary strong{font-size:14px}
+.psi5EvidenceSummary span{font-size:12px;color:#56718a}
+.psi5EvidenceChevron{margin-left:auto;font-weight:700;color:#256b96!important}
+.psi5EvidenceFold[open] .psi5EvidenceSummary{border-bottom:1px solid #dce9ee;border-radius:12px 12px 0 0}
+.psi5EvidenceFold[open] .psi5EvidenceChevron{font-size:0}
+.psi5EvidenceFold[open] .psi5EvidenceChevron:after{content:"Ocultar documentos ▴";font-size:12px}
+
+/* V1.1.67 — 5.5 ELISA: fuentes únicas, detalles bajo demanda */
+.psi55Compact .psi5LegalTop{margin-bottom:12px}
+.psi55CompactRefs{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;margin-bottom:12px;border:1px solid #dce8f1;border-radius:12px;background:#f6fafc;font-size:13px;color:#45647b}
+.psi55CompactRefs strong{color:#193f59;margin-right:4px}
+.psi55CompactRefs button{padding:6px 10px;font-size:12px}
+.psi55CompactLiteral{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #dce8f1;border-radius:12px 12px 0 0;background:#f8fbfd}
+.psi55CompactLiteral h4{margin:4px 0;font-size:16px;color:#163c57}
+.psi55CompactLiteral p{margin:0;font-size:13px;color:#527087}
+.psi55CompactOrg{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 14px;border:1px solid #dce8f1;border-top:0;border-radius:0 0 12px 12px}
+.psi55CompactOrg strong,.psi55CompactOrg small{display:block}
+.psi55CompactOrg small{color:#648097;margin-top:4px}
+.psi55CompactFold{margin-top:10px;border:1px solid #dce8f1;border-radius:11px;background:#fff;padding:0 12px}
+.psi55CompactFold summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;padding:11px 0;color:#244c67;font-size:13px}
+.psi55CompactFold summary span{color:#6b8496;font-weight:400}
+.psi55CompactFold[open] summary{border-bottom:1px solid #e5eef4;margin-bottom:10px}
+.psi55CompactFold .psi55Support{margin:8px 0}
+.psi55CompactFold>small{display:block;margin:8px 0 12px;color:#647f92}
+.psi55CompactSources .psi55bRefs{margin:0 0 12px}
+@media(max-width:760px){.psi55CompactRefs,.psi55CompactLiteral{align-items:flex-start}.psi55CompactLiteral{flex-direction:column}.psi55CompactFold summary{align-items:flex-start;flex-direction:column}}
+
+/* V1.1.68 · 5.4 ELISA compacto: una fuente documental y detalles bajo demanda */
+.psi54Compact{gap:10px}
+.psi54Compact .psi54Intro{padding:13px 16px;align-items:center}
+.psi54Compact .psi54Intro h4{font-size:17px;margin:4px 0}
+.psi54CompactRefs{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:10px 12px;border:1px solid #dce8f1;border-radius:12px;background:#f6fafc;font-size:12px;color:#45647b}
+.psi54CompactRefs strong{color:#193f59;font-size:13px}
+.psi54CompactRefs button,.psi54CompactRefs a{font-size:12px;padding:6px 10px}
+.psi54Compact .psi54Panel{padding:12px 14px}
+.psi54Compact .psi54Area{padding:9px}
+.psi54CompactFold{border:1px solid #dce8f1;border-radius:11px;background:#fff;padding:0 13px}
+.psi54CompactFold summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;padding:12px 0;color:#244c67;font-size:13px}
+.psi54CompactFold summary span{font-size:12px;color:#6b8496;font-weight:400}
+.psi54CompactFold[open] summary{border-bottom:1px solid #e5eef4;margin-bottom:9px}
+.psi54CompactFold p{margin:9px 0 12px;font-size:13px;color:#506c80;line-height:1.5}
+.psi54CompactFold>small{display:block;margin:0 0 12px;color:#617a8e}
+.psi54CompactFold .psi54Requirements{margin:5px 0 12px}
+.psi54CompactCustody .psi54CustodyCard{margin:0;padding:12px 14px}
+.psi54CompactNote summary strong{font-weight:600}
+@media(max-width:760px){.psi54CompactFold summary{flex-direction:column;align-items:flex-start}.psi54Compact .psi54Intro{align-items:flex-start;flex-direction:column}}
+
+/* V1.1.69 — 5.6 ELISA compacto */
+.psi56Compact .psi56Intro{padding:13px 16px;align-items:center}
+.psi56Compact .psi56Intro h4{font-size:17px;margin:4px 0}
+.psi56Reference{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px solid #dce7ed;border-radius:10px;padding:9px 12px;background:#f8fbfd;font-size:12px;color:#45647a}
+.psi56Reference .outline{font-size:12px}
+.psi56ReferenceDivider{height:17px;border-left:1px solid #cbdbe5}
+.psi56Compact .psi56ListHead{padding:10px 13px;align-items:center}
+.psi56Compact .psi56RowTop{padding:10px 13px}
+.psi56Compact .psi56Detail{padding:11px 13px}
+.psi56Criterion{border:1px solid #e0e9ef;border-radius:10px;padding:9px 12px;font-size:12px;color:#45647a;background:#fafcfd}
+.psi56Criterion summary{cursor:pointer;font-weight:650;color:#234d65}
+.psi56Criterion p{margin:8px 0 0}
+
+/* V1.1.70 · Capítulo 5 · patrón ELISA compacto para 5.1–5.3 */
+.psi5CompactRef{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;background:#f2f8f6;border-bottom:1px solid #e0eae8}
+.psi5CompactRef>div:first-child{flex:1;min-width:200px;display:flex;flex-direction:column;gap:3px}
+.psi5CompactRef strong{color:#1a3e43;font-size:13px}.psi5CompactRef small{color:#617784;font-size:11px}
+.psi5CompactRef button,.psi52CompactMain button{font-size:12px;padding:7px 10px}
+.psi52CompactMain{padding:17px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.psi52CompactMain h4{margin:4px 0 6px;color:#1b394b}.psi52CompactMain p{margin:0 0 5px;color:#526a7b;font-size:13px}.psi52CompactMain small{color:#687f8c}
+.psi5CompactFold{margin:0 14px 12px;border:1px solid #e0e9ec;border-radius:10px;background:#fff}
+.psi5CompactFold summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;padding:12px 14px;align-items:center;font-size:13px;color:#244458}
+.psi5CompactFold summary span{font-size:12px;color:#6b8190}.psi5CompactFold>p{margin:0;padding:0 14px 10px;color:#617586;font-size:12px}
+.psi5CompactFold>.psi5LegalButtons{padding:0 14px 12px}.psi53CompactEvidence{padding:12px 14px}.psi5CompactSubhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:space-between;margin-bottom:8px}.psi5CompactSubhead strong{font-size:13px;color:#214658}.psi5CompactSubhead small{font-size:12px;color:#69818f}
+.psi53CompactEvidence .psi53Evidence{padding:9px 0;border-bottom:1px solid #edf1f3}.psi53CompactEvidence .psi53Evidence:last-child{border-bottom:0}
+.psi53 .psi53Area{padding:4px 14px 12px}.psi53 .psi53Notice{margin:0 14px 12px;font-size:12px}.psi53 .psi53Table{font-size:12px}.psi53 .psi53Table th,.psi53 .psi53Table td{padding:8px}
+@media(max-width:680px){.psi5CompactRef{align-items:flex-start}.psi5CompactFold summary{align-items:flex-start;flex-direction:column}}

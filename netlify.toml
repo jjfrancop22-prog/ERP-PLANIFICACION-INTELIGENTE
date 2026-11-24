@@ -2,21 +2,10 @@
 command = "npm run build"
 publish = "dist"
 
-# Firebase Web API key is a public client-side identifier, not a server secret.
-# Avoid Netlify smart detection false-positive on the Firebase client config.
-[build.environment]
-SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
-[[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200
+[functions]
+directory = "netlify/functions"
 
-[[headers]]
-for = "/version.json"
-[headers.values]
-Cache-Control = "no-store, no-cache, must-revalidate"
-
-[[headers]]
-for = "/index.html"
-[headers.values]
-Cache-Control = "no-cache, must-revalidate"
+[dev]
+command = "npm run dev"
+targetPort = 5173
+port = 8888

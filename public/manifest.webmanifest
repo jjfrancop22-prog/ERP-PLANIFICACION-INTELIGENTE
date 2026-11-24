@@ -1,31 +1,24 @@
 {
-  "name": "LAB-PSI · Planificación NEXTGEN",
-  "short_name": "LAB-PSI NEXTGEN",
-  "description": "Planificación y control de calidad del laboratorio LAB-PSI",
-  "lang": "es",
+  "name": "PSI SGC NEXTGEN — Sistema de Gestión de Calidad",
+  "short_name": "PSI SGC",
+  "description": "Sistema de Gestión de Calidad PSI · ISO/IEC 17025",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#0a1830",
+  "theme_color": "#102e57",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }

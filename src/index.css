@@ -1,0 +1,17 @@
+
+/* MC1102 V04 — separación de planificación y revisión documentada */
+.mc2Schedule{margin:12px 0;padding:12px 15px;border:1px solid #c8dcef;border-radius:12px;background:#f1f7fd;color:#234b70;font-size:13px;line-height:1.5}
+.mc2Schedule p{margin:5px 0}
+/* V1.0.82 · Trazabilidad compacta sin eliminar registros históricos */
+.mc2Event{border:1px solid #d4e2ef;border-radius:10px;background:#fff;margin:7px 0;padding:9px 12px;color:#254563}
+.mc2Event summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.mc2Event summary span{color:#17629a;font-size:12px;font-weight:600}
+.mc2Event p{margin:9px 0 5px;white-space:pre-wrap}
+.mc2Event small{display:block;color:#627b93;white-space:pre-wrap}
+
+/* V1.1.12 · 4.2.4 ELISA: navegacion compacta sin alterar registros */
+.psi424Hub{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:18px 20px;margin:0 0 14px;background:#f1f7fb;border:1px solid #cfe2ef;border-radius:13px}
+.psi424Hub h3{margin:6px 0;color:#173b5c;font-size:19px}.psi424Hub p{margin:0}
+.psi424Tabs{display:flex;gap:8px;flex-wrap:wrap}.psi424Tabs button{border:1px solid #c5dbea;background:white;color:#1b5e89;padding:11px 14px;border-radius:9px;font-weight:700;cursor:pointer}.psi424Tabs button.selected{background:#17669a;color:white;border-color:#17669a}
+.psi424QrHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.psi424QrHead h4{margin:0}.psi424QrHead button{font-size:12px}
+@media(max-width:850px){.psi424Hub{align-items:stretch}.psi424Tabs{width:100%}.psi424Tabs button{flex:1}}

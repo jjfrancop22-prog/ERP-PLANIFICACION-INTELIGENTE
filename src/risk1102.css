@@ -1,0 +1,6 @@
+/* V1.0.82 · Trazabilidad compacta sin eliminar registros históricos */
+.mc2Event{border:1px solid #d4e2ef;border-radius:10px;background:#fff;margin:7px 0;padding:9px 12px;color:#254563}
+.mc2Event summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.mc2Event summary span{color:#17629a;font-size:12px;font-weight:600}
+.mc2Event p{margin:9px 0 5px;white-space:pre-wrap}
+.mc2Event small{display:block;color:#627b93;white-space:pre-wrap}

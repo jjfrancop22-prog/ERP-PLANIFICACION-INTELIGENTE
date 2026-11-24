@@ -1,0 +1,25 @@
+
+/* V1.0.68 · Diseño compacto de trabajo MC1101, estilo ELISA */
+.riskElisa .riskTop{margin-bottom:10px}
+.riskElisa .riskTop p{margin-bottom:0}
+.riskElisa .riskClauseNav{gap:8px;margin-bottom:10px}
+.riskElisa .riskClauseNav button{padding:10px 13px}
+.riskElisa .riskCriterion{padding:13px 15px;margin-bottom:11px}
+.riskElisa .riskCriterionHead h3{font-size:16px;margin:3px 0}
+.riskElisa .riskCriterionHead p{margin:3px 0 8px}
+.riskElisa .riskDocPanel{padding:9px 11px}
+.riskElisa .riskDocRow{margin-top:5px;padding:6px 9px}
+.riskElisa .riskDocRow small{margin-top:1px}
+.riskElisa .riskDocTitle p{margin:2px 0}
+.riskElisa .riskLibraryLink{padding:4px 0!important}
+.riskElisa .controlledFormatPanel{margin:10px 0!important;padding:12px 16px!important}
+.riskElisa .riskWorkHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 9px}
+.riskElisa .riskWorkHeading h3{margin:0;font-size:18px}
+.riskElisa .riskWorkHeading p{margin:3px 0 0}
+.riskElisa .riskHeadingActions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.riskElisa .riskHeadingActions button{white-space:nowrap}
+.riskElisa .riskKpis{margin:8px 0!important}
+.riskElisa .riskToolbar{margin:8px 0!important}
+@media(max-width:800px){.riskElisa .riskWorkHeading{align-items:stretch;flex-direction:column}.riskElisa .riskHeadingActions{flex-wrap:wrap}}
+/* MC1102 V04: borrador local compacto */
+.mc2DraftBar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;margin-top:14px;border:1px solid #b9d4eb;border-radius:12px;background:#f1f7fd}.mc2DraftBar>div:first-child{display:flex;flex-direction:column;gap:3px}.mc2DraftBar small{color:#4c6581;font-size:12px}.mc2DraftBar .riskActions{display:flex;gap:8px;flex-wrap:wrap}
